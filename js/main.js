@@ -1,0 +1,176 @@
+// Bootstrap and main loop. Everything else lives in its own module; this file wires them together.
+
+let scene, camera, renderer, controls, ocean, skyDome, rain;
+let myShip;
+let simTime = 0, physAcc = 0;
+const PHYS_DT = 1 / 120;
+const clock = new THREE.Clock();
+
+const waterVisible = () => ocean && ocean.visible;
+
+window.addEventListener('load', () => {
+    initRenderer();
+    myShip = buildShip(scene);
+    initPhysics();
+    resetPhysics();
+
+    buildSea();
+    const cube = Clouds.init();
+    skyDome = Clouds.createSkyDome(cube);
+    scene.add(skyDome);
+    ocean = createOcean(cube);
+    scene.add(ocean);
+    rain = createRain();
+    scene.add(rain.lines);
+
+    initEffects();
+    initShells();
+    initTorpedoes();
+    initPlayerWeapons();
+    initCaptainInput();
+    initMenus();
+    initKeys();
+    applyWeather();
+    Clouds.update(renderer);
+
+    setCameraMode('cinematic');
+    showScreen('mainMenu');
+    $('loading').classList.add('hidden');
+    animate();
+});
+
+function initRenderer() {
+    scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x8899aa, 0.0002);
+
+    camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.5, 70000);
+    camera.position.set(-85, 32, 85);
+
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    $('canvas-container').appendChild(renderer.domElement);
+
+    controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.maxPolarAngle = Math.PI / 2 - 0.02;
+    controls.minDistance = 8;
+    controls.maxDistance = 600;
+    controls.enabled = false;
+
+    ambLight = new THREE.AmbientLight(0xffffff, 0.22);
+    hemiLight = new THREE.HemisphereLight(0xbfdcff, 0x0f2a45, 0.5);
+    sunLight = new THREE.DirectionalLight(0xfff8ee, 1.6);
+    sunLight.castShadow = true;
+    sunLight.shadow.mapSize.set(4096, 4096);
+    Object.assign(sunLight.shadow.camera, { near: 10, far: 400, left: -75, right: 75, top: 75, bottom: -75 });
+    sunLight.shadow.bias = -0.0004;
+    sunLight.shadow.normalBias = 0.04;
+    const fill = new THREE.DirectionalLight(0x9cc4ff, 0.3);
+    fill.position.set(100, 20, -50);
+    scene.add(ambLight, hemiLight, sunLight, sunLight.target, fill);
+
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        if (overlay) resizeOverlay();
+    });
+}
+
+function initKeys() {
+    window.addEventListener('keydown', e => {
+        const k = e.key.toLowerCase();
+        if (k.startsWith('arrow') || k === ' ') e.preventDefault();
+        if (k === 'escape' || k === 'p') {
+            if (Game.running && !Game.over) Game.setPaused(!Game.paused);
+            return;
+        }
+        if (!Game.running || Game.paused) return;
+        if (k === 'a' || k === 'arrowleft') drive.left = true;
+        if (k === 'd' || k === 'arrowright') drive.right = true;
+        if (k === ' ' && captain.active) { ensureAudio(); captain.trigger = true; }
+        if (e.repeat) return;
+        if (k === 'w' || k === 'arrowup') drive.order = Math.min(ORDERS.length - 1, drive.order + 1);
+        if (k === 's' || k === 'arrowdown') drive.order = Math.max(0, drive.order - 1);
+        if (k === 'x') drive.order = STOP_IDX;
+        if (k === 'c') cycleCamera();
+        if (k === 'v') setCaptain(!captain.active);
+        if (k === 't') fireTorpedoes();
+        if (k === 'h') ocean.visible = !ocean.visible;
+        if (captain.active) {
+            if (k === 'z') captain.binoc = !captain.binoc;
+            if (k === 'q') captain.station = Math.max(0, captain.station - 1);
+            if (k === 'e') captain.station = Math.min(2, captain.station + 1);
+        }
+    });
+    window.addEventListener('blur', () => { drive.left = drive.right = false; captain.trigger = false; });
+    window.addEventListener('keyup', e => {
+        const k = e.key.toLowerCase();
+        if (k === 'a' || k === 'arrowleft') drive.left = false;
+        if (k === 'd' || k === 'arrowright') drive.right = false;
+        if (k === ' ') captain.trigger = false;
+    });
+}
+
+function animate() {
+    requestAnimationFrame(animate);
+    const realDt = Math.min(clock.getDelta(), 0.1);
+    // Pause freezes the battle, not the sea: waves and the ship keep moving so settings changes are visible
+    const dt = Game.paused ? 0 : realDt;
+
+    updateDrive(realDt);
+    physAcc += realDt;
+    while (physAcc >= PHYS_DT) {
+        stepPhysics(PHYS_DT, simTime);
+        simTime += PHYS_DT;
+        physAcc -= PHYS_DT;
+    }
+    updateEnemies(dt, simTime);   // dt = 0 while paused: they only ride the waves
+    if (dt > 0) {
+        Game.update(dt);
+        if (Game.mode !== 'menu') updatePlayerDamage(dt);
+        updateShells(dt, simTime);
+        updateTorpedoes(dt, simTime);
+    }
+    WEATHER_U.uTime.value = simTime;
+
+    myShip.position.copy(phys.pos);
+    myShip.quaternion.copy(phys.quat);
+    myShip.updateMatrixWorld(true);
+    if (dt > 0) {
+        updatePlayerGuns(dt);
+        updateTorpedoMounts(dt);
+    }
+    {
+        const spin = drive.thrust * phys.engine / T_MAX * 0.5;
+        myShip.userData.props[0].rotation.z -= spin;
+        myShip.userData.props[1].rotation.z += spin;
+        const flag = myShip.userData.flag;
+        const p = flag.geometry.attributes.position, base = flag.userData.basePos;
+        const flutter = 7 + weather.storm * 6;
+        for (let i = 0; i < p.count; i++) {
+            const fly = -base[i * 3 + 2];
+            p.setX(i, base[i * 3] + Math.sin(fly * 3.2 - simTime * flutter) * 0.09 * fly);
+        }
+        p.needsUpdate = true;
+    }
+
+    updateCamera(realDt, simTime);
+    updateOcean(ocean, simTime, phys.pos, phys.quat, phys.vel);
+    sunLight.target.position.copy(phys.pos);
+    sunLight.position.copy(phys.pos).addScaledVector(SUN_DIR, 200);
+
+    rain.update(dt, phys.vel);
+    updateLightning(realDt);
+    updateEffects(dt);
+    Clouds.update(renderer);
+    skyDome.position.copy(camera.position);
+
+    renderer.render(scene, camera);
+    drawOverlay();
+    if (Game.mode !== 'menu') updateHud(realDt);
+}
