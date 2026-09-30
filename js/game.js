@@ -20,6 +20,7 @@ const Game = {
         resetPhysics();
         resetPlayerDamage();
         resetPlayerWeapons();
+        resetDirector();
         resetWake();
         this.wave = 0;
         this.score = 0;
@@ -145,7 +146,7 @@ const Game = {
         this.stats.sunk++;
         this.score += e.type.score;
         hudMessage(`${e.type.name} sunk! +${e.type.score}`, 'good');
-        if (captain.lock === e) captain.lock = null;
+        if (director.lock === e) director.lock = null;
     },
 
     onPlayerSinking() {

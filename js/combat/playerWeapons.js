@@ -26,7 +26,7 @@ function resetPlayerWeapons() {
 
 const _mp = new THREE.Vector3(), _qi = new THREE.Quaternion();
 function updatePlayerGuns(dt) {
-    const aim = captain.active && captain.aimValid ? captain.aim : null;
+    const aim = Game.running && director.aimValid ? director.aim : null;
     _qi.copy(phys.quat).invert();
     guns.forEach(g => {
         g.reload = Math.max(0, g.reload - dt);
@@ -74,7 +74,7 @@ function updatePlayerGuns(dt) {
         mk37.rotation.y += Math.max(-0.8 * dt, Math.min(0.8 * dt, wrapAngle(tYaw - mk37.rotation.y)));
     }
 
-    if (captain.active && captain.trigger) guns.forEach(g => { if (g.onTarget && g.reload <= 0) fireGun(g); });
+    if (Game.running && director.trigger) guns.forEach(g => { if (g.onTarget && g.reload <= 0) fireGun(g); });
 }
 
 function fireGun(g) {
@@ -94,13 +94,13 @@ function fireGun(g) {
 
 // --- Torpedoes: train the mount that bears, then fire a five-torpedo spread with ~2° between fish ---
 function torpedoSolution() {
-    // Aim: the director's locked target (with lead), else the binocular aim point, else the nearest contact
+    // Aim: the director's locked target (with lead), else the crosshair aim point, else the nearest contact
     let targetPos = null, targetVel = new THREE.Vector3();
-    if (captain.active && captain.lock && !captain.lock.sinking) {
-        targetPos = new THREE.Vector3(captain.lock.x, 0, captain.lock.z);
-        targetVel.copy(enemyVelocity(captain.lock));
-    } else if (captain.active && captain.aimValid) {
-        targetPos = captain.aim.clone();
+    if (director.lock && !director.lock.sinking) {
+        targetPos = new THREE.Vector3(director.lock.x, 0, director.lock.z);
+        targetVel.copy(enemyVelocity(director.lock));
+    } else if (director.aimValid) {
+        targetPos = director.aim.clone();
     } else {
         let best = null;
         enemies.forEach(e => {
@@ -119,7 +119,7 @@ function torpedoSolution() {
 
 function fireTorpedoes() {
     const sol = torpedoSolution();
-    if (!sol) { hudMessage('No torpedo target — lock a contact with the binoculars (V)', 'warn'); return; }
+    if (!sol) { hudMessage('No torpedo target — point the crosshair at a ship and press X', 'warn'); return; }
     if (sol.range > TORP_TYPES.mk15.range) { hudMessage('Target beyond torpedo range (5,500 m)', 'warn'); return; }
     const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(phys.quat);
     const rel = wrapAngle(sol.heading - Math.atan2(fwd.x, fwd.z));   // relative to our bow, + = port

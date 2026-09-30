@@ -1,19 +1,16 @@
-// Captain's view from the bridge: mouse look, 3-14x binoculars with a mil reticle, and Mk 37 director lock.
+// Captain's view from the bridge: mouse look, 3-14x binoculars with a mil reticle. X locks the Mk 37 director
+// on the ship under the crosshair (see aiming.js).
 
 const captain = {
-    active: false, station: 1, yaw: 0, pitch: -0.01, binoc: false, mag: 7, fov: 55, trigger: false,
-    aim: new THREE.Vector3(), aimValid: false, aimRange: Infinity, lock: null, locked: false, dragging: false,
-    relBrg: 0, trueBrg: 0
+    active: false, station: 1, yaw: 0, pitch: -0.01, binoc: false, mag: 7, fov: 55,
+    locked: false, dragging: false, relBrg: 0, trueBrg: 0
 };
 const STATION_NAMES = ['Port Bridge Wing', 'Open Bridge', 'Starboard Bridge Wing'];
 let overlay, overlayCtx;
-const raycaster = new THREE.Raycaster();
-
 function setCaptain(on) {
     captain.active = on;
-    captain.trigger = false;
+    director.trigger = false;
     captain.binoc = false;
-    captain.lock = null;
     document.body.classList.toggle('captain', on);
     if (on) {
         captain.yaw = 0;
@@ -46,41 +43,8 @@ function updateCaptainCamera(dt) {
         camera.updateProjectionMatrix();
     }
 
-    // Line of sight: lock the director on any hull the crosshair touches, else range on the sea
     camera.updateMatrixWorld(true);
-    const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-    raycaster.set(camera.position, dir);
-    raycaster.far = 20000;
-    const live = enemies.filter(e => !e.sinking);
-    const hits = raycaster.intersectObjects(live.map(e => e.obj), true);
-    if (hits.length) {
-        let o = hits[0].object;
-        while (o.parent && !live.some(e => e.obj === o)) o = o.parent;
-        const found = live.find(e => e.obj === o);
-        if (found && found !== captain.lock) {
-            captain.lock = found;
-            hudMessage(`Director locked: ${found.type.name}, ${Math.round(Math.hypot(found.x - phys.pos.x, found.z - phys.pos.z) * 1.0936).toLocaleString()} yds`, 'info');
-        }
-    }
-    if (captain.lock) {
-        const tg = captain.lock;
-        const toT = new THREE.Vector3(tg.x - p.x, tg.obj.position.y + 3 - p.y, tg.z - p.z).normalize();
-        if (tg.sinking || !enemies.includes(tg) || toT.angleTo(dir) > 0.035) captain.lock = null;
-    }
-    captain.aimValid = false;
-    if (captain.lock) {
-        // Mk 1A fire control computer: lead the target (and allow for our own motion) by the time of flight
-        const tg = captain.lock;
-        const sol = firingSolution(Math.hypot(tg.x - phys.pos.x, tg.z - phys.pos.z));
-        const tof = sol ? sol.tof : 0;
-        const v = enemyVelocity(tg);
-        captain.aim.set(tg.x + (v.x - phys.vel.x) * tof, 0, tg.z + (v.z - phys.vel.z) * tof);
-        captain.aimValid = true;
-    } else if (dir.y < -0.0002) {
-        captain.aim.copy(p).addScaledVector(dir, -p.y / dir.y).setY(0);
-        captain.aimValid = true;
-    }
-    captain.aimRange = captain.aimValid ? Math.hypot(captain.aim.x - phys.pos.x, captain.aim.z - phys.pos.z) : Infinity;
+    updateDirector(window.innerWidth / 2, window.innerHeight / 2);
     captain.relBrg = ((-captain.yaw / DEG) % 360 + 540) % 360 - 180;
     captain.trueBrg = ((-(hdg + captain.yaw) / DEG) % 360 + 720) % 360;
 }
@@ -93,7 +57,12 @@ function resizeOverlay() {
 function drawOverlay() {
     const ctx = overlayCtx, w = overlay.width, h = overlay.height;
     ctx.clearRect(0, 0, w, h);
-    if (!captain.active) return;
+    if (!Game.running) return;
+    if (!captain.active) {
+        drawLockBracket(ctx, w, h);
+        drawThirdPersonCrosshair(ctx);
+        return;
+    }
     const cx = w / 2, cy = h / 2;
     const mil = (h / 2) / Math.tan(camera.fov * DEG / 2) * 0.001;
     if (camera.fov < 30) {
@@ -139,20 +108,7 @@ function drawOverlay() {
         ctx.moveTo(cx, cy + 4); ctx.lineTo(cx, cy + 12);
         ctx.stroke();
     }
-    // Locked-target bracket
-    if (captain.lock) {
-        const v = new THREE.Vector3(captain.lock.x, captain.lock.obj.position.y + 4, captain.lock.z).project(camera);
-        if (v.z < 1) {
-            const sx = (v.x * 0.5 + 0.5) * w, sy = (-v.y * 0.5 + 0.5) * h, s = 18;
-            ctx.strokeStyle = 'rgba(255,90,70,0.9)';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            [[-1, -1], [1, -1], [1, 1], [-1, 1]].forEach(([a, b]) => {
-                ctx.moveTo(sx + a * s, sy + b * s * 0.4); ctx.lineTo(sx + a * s, sy + b * s); ctx.lineTo(sx + a * s * 0.4, sy + b * s);
-            });
-            ctx.stroke();
-        }
-    }
+    drawLockBracket(ctx, w, h);
 }
 
 function initCaptainInput() {
@@ -170,12 +126,12 @@ function initCaptainInput() {
             captain.dragging = true;
             return;
         }
-        if (e.button === 0) captain.trigger = true;
+        if (e.button === 0) director.trigger = true;
         if (e.button === 2) captain.binoc = true;
     });
     window.addEventListener('mouseup', e => {
         captain.dragging = false;
-        if (e.button === 0) captain.trigger = false;
+        if (e.button === 0 && captain.active) director.trigger = false;
         if (e.button === 2 && captain.locked) captain.binoc = false;
     });
     window.addEventListener('mousemove', e => {

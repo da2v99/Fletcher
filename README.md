@@ -8,13 +8,16 @@ Or serve the folder: `python -m http.server 8123` and open http://localhost:8123
 ## Controls
 | Key | Action |
 |---|---|
-| W / S | Step the engine-order telegraph (Back Full … Ahead Flank), X = All Stop |
+| W / S | Step the engine-order telegraph (Back Full … Ahead Flank), 0 = All Stop |
 | A / D | Rudder (hold) |
-| V | Captain's view on the bridge: mouse look, right-click / Z / wheel = binoculars |
-| Left-click / Space | Fire the 5"/38s at the director's target (crosshair on a hull locks it) |
+| Mouse | Third-person gun crosshair: the 5"/38s train on the sea or ship under it |
+| X | Lock the ship under the crosshair; the director then tracks it wherever you look. X on empty sea releases |
+| Space | Fire the 5"/38s at the director's target (also left-click in the captain's view) |
+| Left drag / right drag / wheel | Pan / orbit / zoom the camera (a drag in chase view switches to orbit) |
+| B | Captain's view on the bridge: mouse look, right-click / Z / wheel = binoculars, X locks the ship under the reticle |
 | T | Train out a torpedo mount and fire a 5-torpedo spread |
 | Q / E | Move between port wing, open bridge, starboard wing |
-| C | Chase / orbit camera |
+| C | Chase / orbit camera (leaves the captain's view) |
 | Esc / P | Pause, settings (time of day, weather, volume, and every wave parameter) |
 
 **Weather & Sea settings** (main menu or pause menu) open as a side panel so the sea stays visible. Pausing only
