@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fletcher: Destroyer Command</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+    <div id="loading">Raising steam…</div>
+    <div id="canvas-container"></div>
+    <canvas id="overlay"></canvas>
+
+    <!-- ===== In-game HUD ===== -->
+    <div id="hud-top">
+        <div class="stat"><span>SCORE</span><b id="scoreVal">0</b></div>
+        <div class="stat"><span>ENGAGEMENT</span><b id="waveVal">—</b></div>
+        <div class="stat"><span>CONTACTS</span><b id="contactsVal">0</b></div>
+    </div>
+    <div id="messages"></div>
+    <div id="banner"><div id="bannerTitle"></div><div id="bannerSub"></div></div>
+    <div id="camLabel"></div>
+
+    <div id="helm" class="panel">
+        <div class="row"><span class="lbl">SPEED</span><span id="hudSpeed" class="big">0.0</span><span class="unit">kn</span></div>
+        <div class="row"><span class="lbl">HEADING</span><span id="hudHeading" class="big">000</span><span class="unit">°</span></div>
+        <div class="lbl">ENGINES</div>
+        <div id="hudOrder" class="order">All Stop</div>
+        <div class="lbl">RUDDER</div>
+        <div class="rudder-bar"><div id="rudderNeedle"></div></div>
+        <div id="hudRudder" class="sub">Amidships</div>
+        <div class="lbl" style="margin-top:8px">HULL <span id="hullPct" class="pct">100%</span></div>
+        <div class="hull-bar"><div id="hullBar"></div></div>
+        <div id="dmgStatus" class="sub">No damage</div>
+        <div class="lbl" style="margin-top:8px">TORPEDOES <span id="torpCount" class="pct">5 + 5</span></div>
+    </div>
+
+    <canvas id="radar" width="220" height="220"></canvas>
+    <div id="radarLabel">SG RADAR</div>
+
+    <div id="keys" class="panel">
+        <b>W/S</b> engine order · <b>X</b> all stop · <b>A/D</b> rudder<br>
+        <b>V</b> captain's binoculars &amp; guns · <b>T</b> torpedoes<br>
+        <b>C</b> chase / orbit camera · <b>Esc</b> pause
+    </div>
+
+    <div id="captainPanel">
+        <div id="cpStation">Open Bridge</div>
+        <div id="cpRange">RANGE ——</div>
+        <div id="cpBearing"></div>
+        <div id="cpGuns"></div>
+        <div id="cpHelp">Click to take the binoculars · Mouse: look · Right-click / Z / Wheel: binoculars &amp; zoom · Left-click / Space: fire · T: torpedoes · Q / E: station · V: leave</div>
+    </div>
+
+    <!-- ===== Menus ===== -->
+    <div id="mainMenu" class="screen">
+        <div class="menu-card">
+            <div class="kicker">The Slot · Solomon Islands · 1943</div>
+            <h1>FLETCHER</h1>
+            <div class="subtitle">Destroyer Command</div>
+            <p>Take USS Fletcher (DD-445) against Japanese convoys and their escorts. Hunt them on radar, range them through the binoculars, and put five 5-inch guns and ten torpedoes to work. Mind the Long Lances.</p>
+            <button id="btnPatrol" class="btn primary">Begin Patrol</button>
+            <button id="btnCruise" class="btn">Free Cruise</button>
+            <button id="btnSettings" class="btn ghost">Weather &amp; Settings</button>
+            <div class="controls-grid">
+                <span>W / S</span><span>Ring up engine orders</span>
+                <span>A / D</span><span>Rudder left / right</span>
+                <span>V</span><span>Captain's view: binoculars and gun director</span>
+                <span>Click</span><span>Fire the 5"/38s at the locked target</span>
+                <span>T</span><span>Launch a 5-torpedo spread</span>
+                <span>C</span><span>Chase / orbit camera</span>
+            </div>
+        </div>
+    </div>
+
+    <div id="pauseMenu" class="screen">
+        <div class="menu-card small">
+            <h2>Paused</h2>
+            <button id="btnResume" class="btn primary">Resume</button>
+            <button id="btnPauseSettings" class="btn">Weather &amp; Settings</button>
+            <button id="btnQuit" class="btn ghost">Quit to Menu</button>
+        </div>
+    </div>
+
+    <div id="settingsMenu" class="screen">
+        <div class="menu-card settings">
+            <h2>Weather &amp; Sea</h2>
+            <div class="settings-scroll">
+                <h3>Weather</h3>
+                <div class="ctl range"><label>Time of day <b id="setTimeVal"></b></label>
+                    <input id="setTime" type="range" min="5.4" max="13" step="0.05" value="6.4"></div>
+                <div class="ctl range"><label>Weather <b id="setWeatherVal"></b></label>
+                    <input id="setWeather" type="range" min="0" max="1" step="0.01" value="0.6"></div>
+                <div class="ctl range"><label>Volume <b id="setVolumeVal"></b></label>
+                    <input id="setVolume" type="range" min="0" max="1" step="0.05" value="0.8"></div>
+                <div id="seaControls"></div>
+            </div>
+            <div class="settings-buttons">
+                <button id="btnSeaReset" class="btn ghost">Reset waves</button>
+                <button id="btnSettingsBack" class="btn primary">Back</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="gameOver" class="screen">
+        <div class="menu-card small">
+            <div class="kicker red">Lost with all guns firing</div>
+            <h2>USS Fletcher has been sunk</h2>
+            <div id="goStats"></div>
+            <button id="btnRetry" class="btn primary">Try Again</button>
+            <button id="btnGoMenu" class="btn ghost">Main Menu</button>
+        </div>
+    </div>
+
+    <!-- Core -->
+    <script src="js/core/config.js"></script>
+    <script src="js/core/math.js"></script>
+    <script src="js/core/geometry.js"></script>
+    <!-- Ship model -->
+    <script src="js/ship/hullLines.js"></script>
+    <script src="js/ship/parts.js"></script>
+    <script src="js/ship/fletcher.js"></script>
+    <!-- Environment -->
+    <script src="js/env/noise.js"></script>
+    <script src="js/env/weather.js"></script>
+    <script src="js/env/sea.js"></script>
+    <script src="js/env/shipWaves.js"></script>
+    <script src="js/env/clouds.js"></script>
+    <script src="js/env/ocean.js"></script>
+    <!-- Simulation -->
+    <script src="js/physics/shipPhysics.js"></script>
+    <script src="js/fx/particles.js"></script>
+    <script src="js/fx/audio.js"></script>
+    <script src="js/combat/ballistics.js"></script>
+    <script src="js/combat/torpedoes.js"></script>
+    <script src="js/combat/enemyModels.js"></script>
+    <script src="js/combat/enemies.js"></script>
+    <script src="js/combat/damage.js"></script>
+    <script src="js/combat/playerWeapons.js"></script>
+    <!-- View, UI, game -->
+    <script src="js/view/captain.js"></script>
+    <script src="js/view/cameras.js"></script>
+    <script src="js/ui/hud.js"></script>
+    <script src="js/ui/menus.js"></script>
+    <script src="js/game.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>
