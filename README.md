@@ -10,8 +10,8 @@ Or serve the folder: `python -m http.server 8123` and open http://localhost:8123
 |---|---|
 | W / S | Step the engine-order telegraph (Back Full … Ahead Flank), 0 = All Stop |
 | A / D | Rudder (hold) |
-| Mouse | Third-person gun crosshair: the 5"/38s train on the sea or ship under it |
-| X | Lock the ship under the crosshair; the director then tracks it wherever you look. X on empty sea releases |
+| Mouse | Third-person gun crosshair: the 5"/38s train on whatever is under it (a ship, the sea, or max range above the horizon) |
+| X | Lock what's under the crosshair: a ship is tracked with lead wherever you look, a point of sea stays put. X on the current lock releases it |
 | Space | Fire the 5"/38s at the director's target (also left-click in the captain's view) |
 | Left drag / right drag / wheel | Pan / orbit / zoom the camera (a drag in chase view switches to orbit) |
 | B | Captain's view on the bridge: mouse look, right-click / Z / wheel = binoculars, X locks the ship under the reticle |
@@ -26,6 +26,14 @@ wave height (Hs, metres), wavelength scale (auto or manual), speed, wind directi
 (spread, steepness, swell vs detail, med wavelength); detail (sharpness, chop, ripple, asymmetry); macro swell
 (on/off, height, size); colour (deep and peak colours, foam threshold, colour span, depth bias). "Reset waves"
 restores the defaults (1.7 m sea, 14 m peak wavelength, glassy blue swell) while keeping the current wave height. Moving the Weather slider also sets the wave height.
+**Ship heaviness** (Ship motion section) scales the ship's inertia in heave, pitch and roll without changing its
+draft: higher rides heavier and slower through the waves, lower is lively.
+
+## Ship motion
+Buoyancy uses 57 columns along the hull, each feeling the sea averaged over its own patch of hull (a box filter
+per wave) and at mid-draft (wave pressure decays as e^(-kd)), with added mass and radiation damping in heave and
+pitch. Waves short against the hull cancel along its length, so the ship plows through chop and rides the swell.
+The macro swell runs at deep-water speed for its wavelength (ω = √(gk)).
 
 ## Code layout (`js/`)
 | Folder | What lives there |

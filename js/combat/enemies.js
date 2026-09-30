@@ -78,13 +78,14 @@ function updateEnemies(dt, t) {
             e.z += Math.cos(e.heading) * e.speed * dt;
         }
 
-        // Float on the sea: sample bow, stern and both sides
+        // Float on the sea: bow, stern and both sides, each averaging the sea over its half of the hull
         const L = e.model.len * 0.4, B = e.model.beam * 0.45;
         const sx = Math.sin(e.heading), cz = Math.cos(e.heading);
-        const hb = waterHeight(e.x + sx * L, e.z + cz * L, t);
-        const hs = waterHeight(e.x - sx * L, e.z - cz * L, t);
-        const hp = waterHeight(e.x + cz * B, e.z - sx * B, t);
-        const hst = waterHeight(e.x - cz * B, e.z + sx * B, t);
+        const pl = e.model.len * 0.5, pw = e.model.beam * 0.5, pd = 2;
+        const hb = seaPatchHeight(e.x + sx * L, e.z + cz * L, t, sx, cz, pl, pw, pd);
+        const hs = seaPatchHeight(e.x - sx * L, e.z - cz * L, t, sx, cz, pl, pw, pd);
+        const hp = seaPatchHeight(e.x + cz * B, e.z - sx * B, t, sx, cz, pl, pw, pd);
+        const hst = seaPatchHeight(e.x - cz * B, e.z + sx * B, t, sx, cz, pl, pw, pd);
         const sink = e.sinking ? e.sinkT * e.sinkT * 0.01 + e.sinkT * 0.12 : 0;
         const tilt = e.sinking ? e.sinkT : 0;
         e.obj.position.set(e.x, (hb + hs + hp + hst) / 4 - sink, e.z);

@@ -103,7 +103,7 @@ function initKeys() {
         if (k === 'x') {
             if (captain.active) toggleLock(window.innerWidth / 2, window.innerHeight / 2);
             else if (tpAim.onCanvas) toggleLock(tpAim.x, tpAim.y);
-            else toggleLock();
+            else toggleLock();   // mouse off the view: X just releases
         }
         if (k === 'c') cycleCamera();
         if (k === 'b') setCaptain(!captain.active);

@@ -16,6 +16,7 @@ const Game = {
         clearShells();
         clearTorpedoes();
         smokeFx.clear();
+        sprayFx.clear();
         fireFx.clear();
         resetPhysics();
         resetPlayerDamage();

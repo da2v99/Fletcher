@@ -119,7 +119,7 @@ function torpedoSolution() {
 
 function fireTorpedoes() {
     const sol = torpedoSolution();
-    if (!sol) { hudMessage('No torpedo target — point the crosshair at a ship and press X', 'warn'); return; }
+    if (!sol) { hudMessage('No torpedo target — point the crosshair at a ship or the sea', 'warn'); return; }
     if (sol.range > TORP_TYPES.mk15.range) { hudMessage('Target beyond torpedo range (5,500 m)', 'warn'); return; }
     const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(phys.quat);
     const rel = wrapAngle(sol.heading - Math.atan2(fwd.x, fwd.z));   // relative to our bow, + = port
