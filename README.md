@@ -44,3 +44,9 @@ Scripts are plain (non-module) files loaded in order by `index.html`, so the gam
 detail layer, the macro swell, and the height-gradient colouring) scaled from the example's units into metres for the
 chosen sea state. `waterHeight()` evaluates exactly the same maths on the CPU, so buoyancy, shell splashes and
 torpedo depth match the surface you see.
+
+## License
+Fletcher © 2026 [da2v99](https://github.com/da2v99), licensed under
+[CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) — free to share and modify for
+non-commercial use with credit to da2v99. Commercial use is not allowed without permission.
+See [LICENSE](LICENSE).
