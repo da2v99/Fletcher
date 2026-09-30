@@ -23,8 +23,8 @@ const SEA_DEFAULTS = {
     sharp: 0.0, chop: 0.0, ripple: 0.0, asym: 1.0,
     // Example: macro swell
     macroOn: true, macroHeight: 100, macroSize: 0.07,
-    // Ship motion: 1 = true displacement; higher rides heavier and slower, lower is lively
-    heft: 1.5,
+    // Ship mass slider: 0 = a football, 0.5 = the real Fletcher, 1 = two Nimitz-class carriers (shipPhysics.js)
+    massPos: 0.5,
     // Example: colouring
     foam: 0.52, colorSpan: 0.45, depthBias: 1.4, deep: '#001e41', peak: '#0082ff'
 };
@@ -185,23 +185,74 @@ function waterHeight(x, z, t) {
     return seaDisplace(x0, z0, t).y + seaDetail(x, z, t);
 }
 
-// Sea level felt by a patch of hull (len metres along the ship's heading (fx, fz), wid across) for buoyancy.
-// Pressure acts over the whole patch, so each wave is box-filtered: sinc(k·len/2)·sinc(k·wid/2). Waves much
-// shorter than the patch average out instead of being point-sampled (which aliases short waves into big heave
-// kicks), and the rigid body then sums the patches so waves short against the hull cancel along its length:
-// a 115 m destroyer plows through 15 m chop and rides the long swell. depth: wave pressure decays as e^(-k·d)
-// below the surface (the Smith effect), so a keel at depth d barely feels short waves. No detail, no inversion.
+// Sea level felt by a patch of hull (len metres along the ship's heading (fx, fz), wid across, pressure taken
+// at depth metres below the surface) for buoyancy:
+//  - Pressure acts over the whole patch, so each wave is box-filtered by sinc(k·len/2)·sinc(k·wid/2). Waves
+//    much shorter than the patch average out instead of being point-sampled (which aliases them into kicks).
+//  - Wave pressure decays as e^(-k·d) below the surface (the Smith effect): a deep keel barely feels short waves.
+//  - The filtered surface is still a Gerstner surface, so its crests lean and travel sideways: invert that
+//    horizontal motion to find the surface actually over (x, z), as waterHeight() does.
+//  - The small-scale detail layer (chop, ridges: a few metres across) only reaches small, shallow patches.
+// A tiny patch at zero depth gives exactly waterHeight(); a big deep one gives the smooth swell a ship rides.
+// Also leaves, in seaPatchKin and straight from the wave equations (same filtering): v, the rate the surface
+// rises at this fixed spot; gx, gz, its slope (so a hull moving at U sees it rise at v + U·g); and a, the water's
+// vertical acceleration. Hydrodynamic damping and added mass act against these.
 const sinc = u => Math.abs(u) < 1e-4 ? 1 : Math.sin(u) / u;
+const _pr = new Float64Array(WAVE_COUNT);
+const seaPatchKin = { v: 0, a: 0, gx: 0, gz: 0 };
 function seaPatchHeight(x, z, t, fx, fz, len, wid, depth = 0) {
-    const S = Sea.S, te = t * Sea.T, px = x / S, pz = z / S;
-    let y = 0;
-    for (let i = 0; i < Sea.waves.length; i++) {
-        const w = Sea.waves[i];
-        const k = w.w / S;   // rad per metre
-        const r = sinc(k * (w.dx * fx + w.dz * fz) * len / 2) * sinc(k * (w.dx * fz - w.dz * fx) * wid / 2) * Math.exp(-k * depth);
-        y += w.A * r * Math.sin(w.w * (w.dx * px + w.dz * pz) + w.phi * te);
+    const S = Sea.S, V = Sea.V, te = t * Sea.T, waves = Sea.waves, n = waves.length;
+    for (let i = 0; i < n; i++) {
+        const w = waves[i], k = w.w / S;   // rad per metre
+        _pr[i] = sinc(k * (w.dx * fx + w.dz * fz) * len / 2) * sinc(k * (w.dx * fz - w.dz * fx) * wid / 2) * Math.exp(-k * depth);
     }
-    return (y + exMacro(px, pz, te)) * Sea.V;
+    let x0 = x, z0 = z;
+    for (let it = 0; it < 4; it++) {
+        const px = x0 / S, pz = z0 / S;
+        let dx = 0, dz = 0;
+        for (let i = 0; i < n; i++) {
+            const w = waves[i];
+            const c = Math.cos(w.w * (w.dx * px + w.dz * pz) + w.phi * te) * w.QA * _pr[i];
+            dx += w.dx * c;
+            dz += w.dz * c;
+        }
+        // Relaxed fixed-point step: steep (Q > 1) seas fold over and plain iteration can oscillate
+        x0 += 0.8 * (x - dx * V - x0);
+        z0 += 0.8 * (z - dz * V - z0);
+    }
+    const px = x0 / S, pz = z0 / S;
+    // Surface point Y(x0, t) carried sideways by D(x0, t): Y, its gradient and rate, D's Jacobian and rate
+    let y = 0, yt = 0, ay = 0, yx = 0, yz = 0, dt_x = 0, dt_z = 0, jxx = 0, jxz = 0, jzz = 0;
+    for (let i = 0; i < n; i++) {
+        const w = waves[i], ar = w.A * _pr[i], qa = w.QA * _pr[i], om = w.phi * Sea.T, km = w.w / S;
+        const th = w.w * (w.dx * px + w.dz * pz) + w.phi * te;
+        const sn = Math.sin(th), cs = Math.cos(th);
+        y += ar * sn;
+        yt += ar * om * cs;
+        ay -= ar * om * om * sn;
+        yx += ar * km * w.dx * cs;
+        yz += ar * km * w.dz * cs;
+        dt_x -= qa * om * sn * w.dx;
+        dt_z -= qa * om * sn * w.dz;
+        const jj = -qa * km * sn;
+        jxx += jj * w.dx * w.dx; jxz += jj * w.dx * w.dz; jzz += jj * w.dz * w.dz;
+    }
+    // At a fixed spot the surface is made by different water over time: dη/dt = Y_t - ∇Y·J⁻¹·D_t, and its slope
+    // is J⁻ᵀ∇Y, with J = I + ∂D/∂x0 (kept from folding flat where crests overturn)
+    const a11 = 1 + jxx * V, a12 = jxz * V, a22 = 1 + jzz * V;
+    const det = Math.max(0.25, a11 * a22 - a12 * a12);
+    const i11 = a22 / det, i12 = -a12 / det, i22 = a11 / det;
+    const ux = -(i11 * dt_x + i12 * dt_z) * V, uz = -(i12 * dt_x + i22 * dt_z) * V;   // dx0/dt, metres per second
+    const gx = (i11 * yx + i12 * yz) * V, gz = (i12 * yx + i22 * yz) * V;
+    const macroK = 0.002 * SeaParams.macroSize * GOLDEN_RATIO / S, mf = Math.exp(-macroK * depth);
+    const m0 = exMacro(px, pz, te);
+    const mv = (exMacro(px, pz, te + 1e-3) - m0) / 1e-3 * Sea.T;
+    seaPatchKin.v = (yt + mv * mf) * V + (yx * ux + yz * uz) * V;
+    seaPatchKin.gx = gx;
+    seaPatchKin.gz = gz;
+    seaPatchKin.a = ay * V;
+    const size = Math.max(len, wid), fd = Math.exp(-size * size / 16 - depth * 0.8);
+    return (y + m0 * mf) * V + (fd > 0.005 ? fd * seaDetail(x, z, t) : 0);
 }
 
 // ---------------------------------------------------------------- GPU evaluation
