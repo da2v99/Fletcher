@@ -121,7 +121,7 @@ function updateCaptainPanel() {
     if (director.aimValid) {
         const sol = firingSolution(director.aimRange);
         rangeTxt = `RANGE ${Math.round(director.aimRange * 1.0936).toLocaleString()} yds` +
-            (sol ? ` · TOF ${sol.tof.toFixed(1)} s` : ' · OUT OF RANGE') + (director.lock ? ` · LOCKED: ${director.lock.type.name.toUpperCase()}` : '');
+            (sol ? ` · TOF ${sol.tof.toFixed(1)} s` : ' · OUT OF RANGE') + (director.lock ? ` · LOCKED: ${director.lock.type.name.toUpperCase()}` : director.lockPoint ? ' · LOCKED ON POINT' : '');
     }
     $('cpRange').textContent = rangeTxt;
     $('cpBearing').textContent = `BRG ${fmt3(captain.trueBrg)}° T · REL ${Math.abs(Math.round(captain.relBrg))}° ${captain.relBrg > 0.5 ? 'STBD' : captain.relBrg < -0.5 ? 'PORT' : ''}`;

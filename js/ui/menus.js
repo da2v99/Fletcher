@@ -55,6 +55,8 @@ const SEA_CONTROLS = [
     { key: 'macroOn', label: 'Macro variation', type: 'check' },
     { key: 'macroHeight', label: 'Macro height', min: 0, max: 500, step: 1, fmt: v => `${v}`, disabledBy: '!macroOn' },
     { key: 'macroSize', label: 'Macro size', min: 0, max: 0.4, step: 0.01, fmt: v => v.toFixed(2), disabledBy: '!macroOn' },
+    { section: 'Ship motion' },
+    { key: 'heft', label: 'Ship heaviness', min: 0.5, max: 5, step: 0.1, fmt: v => `${v.toFixed(1)}× · ${v < 0.9 ? 'lively' : v < 1.3 ? 'true to life' : v < 2.5 ? 'heavy' : 'very heavy'}` },
     { section: 'Colour' },
     { key: 'deep', label: 'Ocean deep', type: 'color' },
     { key: 'peak', label: 'Ocean peak', type: 'color' },

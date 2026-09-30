@@ -23,13 +23,15 @@ const SEA_DEFAULTS = {
     sharp: 0.0, chop: 0.0, ripple: 0.0, asym: 1.0,
     // Example: macro swell
     macroOn: true, macroHeight: 100, macroSize: 0.07,
+    // Ship motion: 1 = true displacement; higher rides heavier and slower, lower is lively
+    heft: 1.5,
     // Example: colouring
     foam: 0.52, colorSpan: 0.45, depthBias: 1.4, deep: '#001e41', peak: '#0082ff'
 };
 const SeaParams = Object.assign({}, SEA_DEFAULTS);
 
 const Sea = {
-    hs: 0, S: 0.2, V: 0.03, T: 0.4, maxAmp: 0, detailMean: 0,
+    hs: 0, S: 0.2, V: 0.03, T: 0.4, macroT: 1, maxAmp: 0, detailMean: 0,
     waves: [],
     u1: Array.from({ length: WAVE_COUNT }, () => new THREE.Vector4()),   // dir.x, dir.z, w, A      (example units)
     u2: Array.from({ length: WAVE_COUNT }, () => new THREE.Vector4()),   // phase speed, Q*A, -, -
@@ -85,6 +87,11 @@ function buildSea() {
     Sea.V = gerstnerSd > 0 ? (hs / 4) / gerstnerSd : 0;
     Sea.T = 1 / (5 * Math.sqrt(Sea.S));
     Sea.scale.set(Sea.S, Sea.V, Sea.T, THREE.MathUtils.clamp(hs / 2, 0.15, 1));
+    // Macro swell clock: the example runs it as fast as the short waves, which makes a 500 m swell rise and
+    // fall every few seconds (the whole sea pumping, and the ship with it). Slow it to deep-water dispersion,
+    // ω = √(gk) for its main component, so at speed 5 it moves like a real swell of that length.
+    const kMacro = 0.002 * Math.max(P.macroSize, 1e-3) * GOLDEN_RATIO / Sea.S;
+    Sea.macroT = Math.sqrt(GRAVITY * kMacro) / (0.15 * 5 * Sea.T);
 
     // Detail layer's mean level (removed so mean sea level stays at 0); depends on the detail settings
     let mean = 0;
@@ -93,7 +100,7 @@ function buildSea() {
 
     SEA_U.uEx1.value.set(P.sharp, P.chop, P.ripple, P.asym);
     SEA_U.uEx2.value.set(P.speed, P.macroOn ? P.macroHeight : 0, P.macroSize, Sea.detailMean);
-    SEA_U.uEx3.value.set(P.depthBias, P.foam, 0, 0);
+    SEA_U.uEx3.value.set(P.depthBias, P.foam, Sea.macroT, 0);
     SEA_U.uDeepC.value.set(P.deep);
     SEA_U.uPeakC.value.set(P.peak);
 
@@ -112,6 +119,7 @@ function exMacro(x, z, t) {
     const P = SeaParams;
     if (!P.macroOn) return 0;
     const f = 0.002 * P.macroSize, phi = GOLDEN_RATIO, sp = P.speed;
+    t *= Sea.macroT;
     const m1 = Math.sin(x * f * phi + t * 0.15 * sp) * Math.cos(z * f * phi * phi - t * 0.12 * sp);
     const m2 = Math.sin((x - z) * f * phi * phi * phi + t * 0.1 * sp);
     return (m1 + m2 * 0.5) * P.macroHeight;
@@ -177,6 +185,25 @@ function waterHeight(x, z, t) {
     return seaDisplace(x0, z0, t).y + seaDetail(x, z, t);
 }
 
+// Sea level felt by a patch of hull (len metres along the ship's heading (fx, fz), wid across) for buoyancy.
+// Pressure acts over the whole patch, so each wave is box-filtered: sinc(k·len/2)·sinc(k·wid/2). Waves much
+// shorter than the patch average out instead of being point-sampled (which aliases short waves into big heave
+// kicks), and the rigid body then sums the patches so waves short against the hull cancel along its length:
+// a 115 m destroyer plows through 15 m chop and rides the long swell. depth: wave pressure decays as e^(-k·d)
+// below the surface (the Smith effect), so a keel at depth d barely feels short waves. No detail, no inversion.
+const sinc = u => Math.abs(u) < 1e-4 ? 1 : Math.sin(u) / u;
+function seaPatchHeight(x, z, t, fx, fz, len, wid, depth = 0) {
+    const S = Sea.S, te = t * Sea.T, px = x / S, pz = z / S;
+    let y = 0;
+    for (let i = 0; i < Sea.waves.length; i++) {
+        const w = Sea.waves[i];
+        const k = w.w / S;   // rad per metre
+        const r = sinc(k * (w.dx * fx + w.dz * fz) * len / 2) * sinc(k * (w.dx * fz - w.dz * fx) * wid / 2) * Math.exp(-k * depth);
+        y += w.A * r * Math.sin(w.w * (w.dx * px + w.dz * pz) + w.phi * te);
+    }
+    return (y + exMacro(px, pz, te)) * Sea.V;
+}
+
 // ---------------------------------------------------------------- GPU evaluation
 
 const SEA_GLSL = `
@@ -187,13 +214,14 @@ const SEA_GLSL = `
     uniform float uNormSpan;
     uniform vec4 uEx1;           // sharp, chop, ripple, asym
     uniform vec4 uEx2;           // speed, macro height (0 = off), macro size, detail mean
-    uniform vec4 uEx3;           // depth bias, foam threshold
+    uniform vec4 uEx3;           // depth bias, foam threshold, macro swell clock
     uniform vec3 uDeepC;
     uniform vec3 uPeakC;
 
     float exMacro(vec2 pos, float t) {
         if (uEx2.y <= 0.0) return 0.0;
         float f = 0.002 * uEx2.z, phi = 1.6180339887, sp = uEx2.x;
+        t *= uEx3.z;
         float m1 = sin(pos.x * f * phi + t * 0.15 * sp) * cos(pos.y * f * phi * phi - t * 0.12 * sp);
         float m2 = sin((pos.x - pos.y) * f * phi * phi * phi + t * 0.1 * sp);
         return (m1 + m2 * 0.5) * uEx2.y;

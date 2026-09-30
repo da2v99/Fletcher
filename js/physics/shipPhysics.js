@@ -14,6 +14,13 @@ const K_LAT = 3e5, K_LAT_LIN = 4e5;
 const K_RUDDER = 1320, C_YAW = 1.5e7;
 const K_TURN_DRAG = 7.8e5;      // speed bleeds off in hard turns
 const RUDDER_MAX = 35, RUDDER_RATE = 5;   // degrees, degrees/second
+// Added mass: heaving or pitching a hull also accelerates the water around it (~0.9 of the displacement for a
+// slender hull), which slows those motions to real periods so short waves can't jolt the ship about
+const ADDED_MASS_HEAVE = 0.9, ADDED_INERTIA_PITCH = 0.9;
+const HEAVE_DAMPING = 0.45, PITCH_DAMPING = 0.3;   // fractions of critical (wave-making radiation damping)
+// Ship heaviness (settings, SeaParams.heft) scales the inertia in heave, pitch and roll but not the weight:
+// the ship floats at the same draft, but responds more slowly and less to each passing wave.
+const heft = () => Math.max(0.2, SeaParams.heft || 1);
 
 const ORDERS = [
     { name: 'Back Full', f: -0.75 }, { name: 'Back 2/3', f: -0.5 }, { name: 'Back 1/3', f: -0.3 },
@@ -42,7 +49,7 @@ function initPhysics() {
         const kCol = RHO * GRAVITY * 2 * hb * dz / 3;
         // Above the waterline the flared bow is much wider: reserve buoyancy that lifts it out of waves
         const kAbove = RHO * GRAVITY * 2 * lerp(hb, deckHalfWidth(z), 0.6) * dz / 3;
-        [-1, 0, 1].forEach(j => phys.samples.push({ local: new THREE.Vector3(j * hb, 0, z), k: kCol, kAbove, fb: sheerY(z) }));
+        [-1, 0, 1].forEach(j => phys.samples.push({ local: new THREE.Vector3(j * hb, 0, z), k: kCol, kAbove, fb: sheerY(z), len: dz, wid: 2 * hb }));
         K += 3 * kCol;
         lcbSum += 3 * kCol * z;
     }
@@ -59,10 +66,10 @@ function initPhysics() {
     phys.Teff = SHIP_MASS * GRAVITY / K;
     phys.cCrit = 2 * Math.sqrt(K * SHIP_MASS);
     phys.cRoll = 0.2 * 2 * Math.sqrt(kRoll * I_roll);   // bilge keels
-    phys.inertia.set(SHIP_MASS * PITCH_GYRADIUS ** 2, SHIP_MASS * PITCH_GYRADIUS ** 2, I_roll);   // body x = pitch, y = yaw, z = roll
+    phys.inertia.set(SHIP_MASS * PITCH_GYRADIUS ** 2 * (1 + ADDED_INERTIA_PITCH), SHIP_MASS * PITCH_GYRADIUS ** 2, I_roll);   // body x = pitch, y = yaw, z = roll
 }
 
-const _r = new THREE.Vector3(), _f = new THREE.Vector3(), _tmp = new THREE.Vector3(), _qInv = new THREE.Quaternion();
+const _r = new THREE.Vector3(), _f = new THREE.Vector3(), _tmp = new THREE.Vector3(), _I = new THREE.Vector3(), _qInv = new THREE.Quaternion();
 function applyForce(F, T, rWorld, fWorld) {
     F.add(fWorld);
     T.add(_tmp.copy(rWorld).cross(fWorld));
@@ -88,16 +95,20 @@ function stepPhysics(dt, t) {
     applyForce(F, T, _r.set(0, CG_Y, phys.cgZ).applyQuaternion(quat), _f.set(0, -SHIP_MASS * GRAVITY, 0));
     if (phys.flood > 0) applyForce(F, T, _r.copy(phys.floodPoint).applyQuaternion(quat), _f.set(0, -phys.flood * GRAVITY, 0));
 
-    // Buoyancy columns
+    // Buoyancy columns, each feeling the sea averaged over its own patch of hull (pressure taken at mid-draft)
+    const h = heft(), mHeave = (SHIP_MASS * (1 + ADDED_MASS_HEAVE) + phys.flood) * h;
+    const cHeave = HEAVE_DAMPING * 2 * Math.sqrt(phys.K * mHeave);
+    _tmp.set(0, 0, 1).applyQuaternion(quat);
+    const hl = Math.hypot(_tmp.x, _tmp.z) || 1, fx = _tmp.x / hl, fz = _tmp.z / hl;
     for (const s of phys.samples) {
         _r.copy(s.local).applyQuaternion(quat);
         const px = pos.x + _r.x, py = pos.y + _r.y, pz = pos.z + _r.z;
-        let sub = waterHeight(px, pz, t) - py + phys.Teff;
+        let sub = seaPatchHeight(px, pz, t, fx, fz, s.len, s.wid, phys.Teff * 0.5) - py + phys.Teff;
         if (sub <= 0) continue;
         const below = Math.min(sub, phys.Teff);
         const above = Math.min(Math.max(sub - phys.Teff, 0), s.fb);
         const vy = vel.y + (angVel.z * _r.x - angVel.x * _r.z);
-        const fy = s.k * below + s.kAbove * above - 0.3 * phys.cCrit * (s.k / phys.K) * vy;
+        const fy = s.k * below + s.kAbove * above - cHeave * (s.k / phys.K) * vy;
         applyForce(F, T, _r, _f.set(0, fy, 0));
     }
 
@@ -118,19 +129,21 @@ function stepPhysics(dt, t) {
     applyForce(F, T, toWorld(_r.set(0, -2.5, -51)), toWorld(_f.set(K_RUDDER * delta * flow, 0, 0)));
 
     // Angular integration (body frame, with damping)
-    const I = phys.inertia;
+    const I = _I.set(phys.inertia.x * h, phys.inertia.y, phys.inertia.z * h);
     const wb = angVel.clone().applyQuaternion(_qInv);
     const Tb = T.applyQuaternion(_qInv);
-    Tb.x -= 0.15 * 2 * Math.sqrt(phys.K * 800 * I.x) * wb.x;
+    Tb.x -= PITCH_DAMPING * 2 * Math.sqrt(phys.K * 800 * I.x) * wb.x;
     Tb.y -= C_YAW * wb.y * (Math.abs(u) + 2);
-    Tb.z -= phys.cRoll * wb.z;
+    Tb.z -= phys.cRoll * Math.sqrt(h) * wb.z;
     const gyro = wb.clone().cross(new THREE.Vector3(I.x * wb.x, I.y * wb.y, I.z * wb.z));
     wb.x += (Tb.x - gyro.x) / I.x * dt;
     wb.y += (Tb.y - gyro.y) / I.y * dt;
     wb.z += (Tb.z - gyro.z) / I.z * dt;
     angVel.copy(wb).applyQuaternion(quat);
 
-    vel.addScaledVector(F, dt / mass);
+    vel.x += F.x * dt / mass;
+    vel.z += F.z * dt / mass;
+    vel.y += F.y * dt / mHeave;
     pos.addScaledVector(vel, dt);
 
     const dq = new THREE.Quaternion(angVel.x * dt * 0.5, angVel.y * dt * 0.5, angVel.z * dt * 0.5, 0).multiply(quat);
