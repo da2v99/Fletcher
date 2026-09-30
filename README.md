@@ -26,14 +26,25 @@ wave height (Hs, metres), wavelength scale (auto or manual), speed, wind directi
 (spread, steepness, swell vs detail, med wavelength); detail (sharpness, chop, ripple, asymmetry); macro swell
 (on/off, height, size); colour (deep and peak colours, foam threshold, colour span, depth bias). "Reset waves"
 restores the defaults (1.7 m sea, 14 m peak wavelength, glassy blue swell) while keeping the current wave height. Moving the Weather slider also sets the wave height.
-**Ship heaviness** (Ship motion section) scales the ship's inertia in heave, pitch and roll without changing its
-draft: higher rides heavier and slower through the waves, lower is lively.
+**Ship mass** (Ship motion section) runs from a football (0.43 kg) through the real Fletcher (2,900 t, the
+middle of the slider) to two Nimitz-class carriers (200,000 t). The ship then moves in the waves like a
+geometrically similar hull of that mass would (see Ship motion below); steering and speed stay the Fletcher's.
 
 ## Ship motion
-Buoyancy uses 57 columns along the hull, each feeling the sea averaged over its own patch of hull (a box filter
-per wave) and at mid-draft (wave pressure decays as e^(-kd)), with added mass and radiation damping in heave and
-pitch. Waves short against the hull cancel along its length, so the ship plows through chop and rides the swell.
-The macro swell runs at deep-water speed for its wavelength (ω = √(gk)).
+A rigid body floated by 57 buoyancy columns along the hull:
+- Each column feels the sea averaged over its own patch of hull (a box filter per wave) at mid-draft (wave
+  pressure decays as e^(-kd)), following the Gerstner surface as it leans and travels. Waves short against the
+  hull cancel along its length, so a ship plows through chop and rides the swell.
+- Buoyancy is one-sided and acts at the centre of the submerged volume, including the flared topsides and the
+  deckhouse: the righting arm peaks near 40° and vanishes near 72°, like a destroyer's.
+- Radiation damping and quadratic drag act on the hull's motion relative to the water surface under it, and
+  added mass (only while wet) both resists the hull and carries it with the water's acceleration.
+- Rotation is about the centre of gravity; heading (steering) and tilt (pitch, roll) are integrated separately.
+- **Mass slider = Froude scaling.** Steadiness in a seaway comes from size relative to the waves, so the hull is
+  scaled by s = (M / 2,900 t)^(1/3): lengths and draft x s, mass x s³, inertia x s⁵, natural periods x √s.
+  Calm-water roll periods: football 0.58 s, Fletcher 8.0 s, 2x Nimitz 16.2 s. Small hulls are drag-dominated
+  and ride every wave; in very steep seas a hull under ~5 t can capsize, and a game assist rights it after 1.5 s.
+- The macro swell runs at deep-water speed for its wavelength (ω = √(gk)).
 
 ## Code layout (`js/`)
 | Folder | What lives there |
