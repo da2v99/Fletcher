@@ -5,11 +5,11 @@ let cameraMode = 'cinematic';
 const lastShipPos = new THREE.Vector3();
 const cine = { angle: 2.2, radius: 150, height: 34 };
 
-function setCameraMode(mode) {
+function setCameraMode(mode, keepView = false) {
     cameraMode = mode;
     controls.enabled = mode === 'orbit';
-    if (mode === 'orbit') {
-        controls.target.copy(phys.pos).add(new THREE.Vector3(0, 6, 0));
+    if (mode === 'orbit') controls.target.copy(phys.pos).add(new THREE.Vector3(0, 6, 0));
+    if (mode === 'orbit' && !keepView) {
         const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(phys.quat);
         camera.position.copy(phys.pos).addScaledVector(fwd, 60).add(new THREE.Vector3(fwd.z * 90, 35, -fwd.x * 90));
     }
@@ -20,6 +20,16 @@ function setCameraMode(mode) {
 function cycleCamera() {
     if (captain.active) { setCaptain(false); return; }
     setCameraMode(cameraMode === 'chase' ? 'orbit' : 'chase');
+}
+
+// Grabbing the view in chase mode (left-drag pan, right-drag orbit, wheel zoom) hands over to the orbit camera.
+// Capture-phase listeners run before OrbitControls' own, so the same drag carries straight on.
+function initCameraInput() {
+    const el = renderer.domElement;
+    const grab = () => { if (Game.running && cameraMode === 'chase') setCameraMode('orbit', true); };
+    el.addEventListener('pointerdown', e => { if (e.button === 0 || e.button === 2) grab(); }, { capture: true });
+    el.addEventListener('wheel', grab, { capture: true });
+    el.addEventListener('contextmenu', e => { if (!captain.active) e.preventDefault(); });
 }
 
 function updateCamera(dt, t) {
@@ -42,6 +52,12 @@ function updateCamera(dt, t) {
         camera.lookAt(phys.pos.x, phys.pos.y + 7, phys.pos.z);
     }
     lastShipPos.copy(phys.pos);
+    if (cameraMode !== 'captain') {
+        if (Game.running) {
+            camera.updateMatrixWorld(true);
+            updateThirdPersonAim();
+        } else director.aimValid = false;
+    }
 
     if (cameraMode !== 'captain' && waterVisible()) {
         const wh = waterHeight(camera.position.x, camera.position.z, t) + 1.5;

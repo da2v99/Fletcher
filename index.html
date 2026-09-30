@@ -44,9 +44,10 @@
     <div id="radarLabel">SG RADAR</div>
 
     <div id="keys" class="panel">
-        <b>W/S</b> engine order · <b>X</b> all stop · <b>A/D</b> rudder<br>
-        <b>V</b> captain's binoculars &amp; guns · <b>T</b> torpedoes<br>
-        <b>C</b> chase / orbit camera · <b>Esc</b> pause
+        <b>W/S</b> engine order · <b>0</b> all stop · <b>A/D</b> rudder<br>
+        <b>Mouse</b> crosshair · <b>X</b> lock ship · <b>Space</b> fire · <b>T</b> torpedoes<br>
+        <b>LMB</b> pan · <b>RMB</b> orbit · <b>Wheel</b> zoom · <b>C</b> chase / orbit<br>
+        <b>B</b> captain's view · <b>Esc</b> pause
     </div>
 
     <div id="captainPanel">
@@ -54,7 +55,7 @@
         <div id="cpRange">RANGE ——</div>
         <div id="cpBearing"></div>
         <div id="cpGuns"></div>
-        <div id="cpHelp">Click to take the binoculars · Mouse: look · Right-click / Z / Wheel: binoculars &amp; zoom · Left-click / Space: fire · T: torpedoes · Q / E: station · V: leave</div>
+        <div id="cpHelp">Click to take the binoculars · Mouse: look · Right-click / Z / Wheel: binoculars &amp; zoom · X: lock / release ship · Left-click / Space: fire · T: torpedoes · Q / E: station · B: leave</div>
     </div>
 
     <!-- ===== Menus ===== -->
@@ -70,10 +71,12 @@
             <div class="controls-grid">
                 <span>W / S</span><span>Ring up engine orders</span>
                 <span>A / D</span><span>Rudder left / right</span>
-                <span>V</span><span>Captain's view: binoculars and gun director</span>
-                <span>Click</span><span>Fire the 5"/38s at the locked target</span>
+                <span>Mouse</span><span>Gun crosshair (guns follow it)</span>
+                <span>X</span><span>Lock the ship under the crosshair</span>
+                <span>Space</span><span>Fire the 5"/38s</span>
+                <span>B</span><span>Captain's view: binoculars and gun director</span>
                 <span>T</span><span>Launch a 5-torpedo spread</span>
-                <span>C</span><span>Chase / orbit camera</span>
+                <span>LMB / RMB</span><span>Pan / orbit the camera (C: back to chase)</span>
             </div>
         </div>
     </div>
@@ -143,6 +146,7 @@
     <script src="js/combat/damage.js"></script>
     <script src="js/combat/playerWeapons.js"></script>
     <!-- View, UI, game -->
+    <script src="js/view/aiming.js"></script>
     <script src="js/view/captain.js"></script>
     <script src="js/view/cameras.js"></script>
     <script src="js/ui/hud.js"></script>

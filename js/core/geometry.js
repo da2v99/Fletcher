@@ -102,16 +102,67 @@ function gridMaterial(repX, repY, color = 0x3a3f44) {
     return new THREE.MeshStandardMaterial({ color, map: tex, alphaTest: 0.4, side: THREE.DoubleSide, roughness: 0.8, metalness: 0.3 });
 }
 
+// Hex colour -> 'vec3(r, g, b)' for shader snippets
+const glslColor = hex => { const c = new THREE.Color(hex); return `vec3(${c.r.toFixed(3)}, ${c.g.toFixed(3)}, ${c.b.toFixed(3)})`; };
+
+// Measure 22: haze grey on vertical surfaces, deck blue on everything that faces the sky
+function measure22(mat) {
+    mat.onBeforeCompile = shader => {
+        shader.vertexShader = shader.vertexShader
+            .replace('#include <common>', '#include <common>\nvarying float vUp;')
+            .replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\nvUp = normalize(mat3(modelMatrix) * objectNormal).y;');
+        shader.fragmentShader = shader.fragmentShader
+            .replace('#include <common>', '#include <common>\nvarying float vUp;')
+            .replace('vec4 diffuseColor = vec4( diffuse, opacity );',
+                `vec4 diffuseColor = vec4(mix(diffuse, ${glslColor(DECK_BLUE)}, smoothstep(0.82, 0.95, abs(vUp))), opacity);`);
+    };
+    return mat;
+}
+
+// Painted steel with procedural weathering: soot and grime pooling low, rust streaks running down from
+// seams and fittings, chipped lighter edges. Works in object space so each part weathers on its own.
+function weathered(mat, amount = 1) {
+    mat.onBeforeCompile = shader => {
+        shader.vertexShader = shader.vertexShader
+            .replace('#include <common>', '#include <common>\nvarying vec3 vObjPos;')
+            .replace('#include <begin_vertex>', '#include <begin_vertex>\nvObjPos = position;');
+        shader.fragmentShader = shader.fragmentShader
+            .replace('#include <common>', `#include <common>
+                varying vec3 vObjPos;
+                float wHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+                float wNoise(vec2 p) {
+                    vec2 i = floor(p), f = fract(p);
+                    f = f * f * (3.0 - 2.0 * f);
+                    return mix(mix(wHash(i), wHash(i + vec2(1, 0)), f.x), mix(wHash(i + vec2(0, 1)), wHash(i + vec2(1, 1)), f.x), f.y);
+                }`)
+            .replace('vec4 diffuseColor = vec4( diffuse, opacity );', `
+                vec3 wp = vObjPos;
+                float across = wp.x + wp.z * 0.93;
+                float blotch = wNoise(wp.xz * 1.7 + wp.y * 0.6) * 0.6 + wNoise(vec2(across, wp.y) * 5.0) * 0.4;
+                // Vertical streaks: narrow columns, stronger lower down
+                float col = wNoise(vec2(across * 9.0, wp.y * 0.35));
+                float streak = smoothstep(0.62, 0.95, col) * (0.55 + 0.45 * wNoise(vec2(across * 3.0, wp.y * 2.0)));
+                float grime = clamp((0.9 - wp.y) * 0.25, 0.0, 0.3) + (blotch - 0.5) * 0.18;
+                vec3 c = diffuse * (1.0 - ${amount.toFixed(2)} * (grime + streak * 0.22));
+                c = mix(c, vec3(0.42, 0.28, 0.2) * 0.8, ${amount.toFixed(2)} * streak * 0.18 * wNoise(vec2(across * 21.0, wp.y * 4.0)));
+                vec4 diffuseColor = vec4(c, opacity);`);
+    };
+    return mat;
+}
+
 function createMaterials() {
     const std = (color, o = {}) => new THREE.MeshStandardMaterial(Object.assign({ color, roughness: 0.72, metalness: 0.1, flatShading: true, side: THREE.DoubleSide }, o));
     return {
-        gray: std(HAZE_GRAY),
-        grayDark: std(0x5f676e),
-        grayLight: std(0x8d949a),
+        gray: measure22(std(HAZE_GRAY)),
+        grayDark: std(0x6b737c),
+        grayLight: std(0x969ea6),
+        turret: weathered(std(0x7f878f, { roughness: 0.85 })),
+        turretDark: weathered(std(0x737b84, { roughness: 0.8 })),
+        canvasBag: weathered(std(0xcbbd98, { roughness: 1.0, flatShading: false }), 0.8),
         deck: new THREE.MeshStandardMaterial({ color: DECK_BLUE, roughness: 0.95, metalness: 0.05, side: THREE.DoubleSide }),
         black: std(0x1b1c1e, { roughness: 0.9 }),
         soot: std(0x0b0b0b, { roughness: 1.0 }),
-        gunMetal: std(0x4b5157, { metalness: 0.4, roughness: 0.5 }),
+        gunMetal: std(0x575e65, { metalness: 0.4, roughness: 0.5 }),
         metal: std(0x6c7278, { metalness: 0.5, roughness: 0.5 }),
         window: std(0x0e1318, { roughness: 0.15, metalness: 0.8 }),
         canvas: std(0x8a8570, { roughness: 1.0 }),

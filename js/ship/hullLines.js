@@ -178,12 +178,12 @@ function createHullMaterial() {
             `
             float y = vLocalPos.y;
             float z = vLocalPos.z;
-            vec3 hazeGray = vec3(0.478, 0.510, 0.541);
-            vec3 navyBlue = vec3(0.196, 0.243, 0.294);
+            vec3 hazeGray = ${glslColor(HAZE_GRAY)};
+            vec3 navyBlue = ${glslColor(NAVY_BLUE)};
             vec3 customColor;
 
             // Measure 22: navy blue up to the lowest point of the sheer, haze gray above
-            if (y < -0.08)      customColor = vec3(0.35, 0.11, 0.09);   // anti-fouling red
+            if (y < -0.08)      customColor = ${glslColor(HULL_RED)};   // anti-fouling red
             else if (y < 0.32)  customColor = vec3(0.05, 0.05, 0.055);  // boot topping
             else if (y < 3.38)  customColor = navyBlue;
             else                customColor = hazeGray;

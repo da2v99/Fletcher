@@ -118,10 +118,10 @@ function updateHud(dt) {
 function updateCaptainPanel() {
     $('cpStation').textContent = STATION_NAMES[captain.station] + (captain.binoc ? ` · ${captain.mag.toFixed(0)}× binoculars` : '');
     let rangeTxt = 'RANGE ——';
-    if (captain.aimValid) {
-        const sol = firingSolution(captain.aimRange);
-        rangeTxt = `RANGE ${Math.round(captain.aimRange * 1.0936).toLocaleString()} yds` +
-            (sol ? ` · TOF ${sol.tof.toFixed(1)} s` : ' · OUT OF RANGE') + (captain.lock ? ` · LOCKED: ${captain.lock.type.name.toUpperCase()}` : '');
+    if (director.aimValid) {
+        const sol = firingSolution(director.aimRange);
+        rangeTxt = `RANGE ${Math.round(director.aimRange * 1.0936).toLocaleString()} yds` +
+            (sol ? ` · TOF ${sol.tof.toFixed(1)} s` : ' · OUT OF RANGE') + (director.lock ? ` · LOCKED: ${director.lock.type.name.toUpperCase()}` : '');
     }
     $('cpRange').textContent = rangeTxt;
     $('cpBearing').textContent = `BRG ${fmt3(captain.trueBrg)}° T · REL ${Math.abs(Math.round(captain.relBrg))}° ${captain.relBrg > 0.5 ? 'STBD' : captain.relBrg < -0.5 ? 'PORT' : ''}`;

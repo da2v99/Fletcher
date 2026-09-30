@@ -2,33 +2,85 @@
 
 // --- Armament ---
 
-// 5"/38 Mk 30 single enclosed mount (gun faces +Z)
+// 5"/38 Mk 30 single enclosed mount (gun faces +Z). Slab-sided shield with a sloped glacis and heavily
+// chamfered front corners, rounded roof edges, a gun slot running up the face and over the roof closed by
+// a canvas blast bag, pointer / trainer sight ports on the cheeks, and roof sight hoods.
 function createGunTurret() {
     const turret = new THREE.Group();
-    addMesh(turret, Cyl(1.75, 1.8, 0.35, 28), MAT.grayDark, 0, 0.175, 0);
+    const M = MAT.turret, D = MAT.turretDark, K = MAT.black;
+    const wallX = y => 1.72 - 0.14 * (y - 0.3) / 2.02 + 0.015;   // side wall leans in toward the roof
+    addMesh(turret, Cyl(1.78, 1.84, 0.3, 32), D, 0, 0.15, 0);     // training base ring
+    addMesh(turret, Cyl(1.86, 1.86, 0.06, 32), MAT.grayDark, 0, 0.03, 0);
 
-    const bottom = [[-1.15, 2.05], [1.15, 2.05], [1.65, 0.9], [1.65, -2.3], [-1.65, -2.3], [-1.65, 0.9]];
-    const top = [[-0.85, 1.15], [0.85, 1.15], [1.4, 0.55], [1.4, -2.2], [-1.4, -2.2], [-1.4, 0.55]];
-    addMesh(turret, loftPrism(bottom, 0.35, top, 2.6), MAT.gray);
+    // Shield: straight lower walls, sloped glacis, then a bevelled band that rounds the roof edge
+    const base = [[-0.72, 2.12], [0.72, 2.12], [1.58, 1.24], [1.72, 0.42], [1.72, -2.42], [-1.72, -2.42], [-1.72, 0.42], [-1.58, 1.24]];
+    const shoulder = [[-0.6, 1.58], [0.6, 1.58], [1.42, 0.86], [1.58, 0.2], [1.58, -2.34], [-1.58, -2.34], [-1.58, 0.2], [-1.42, 0.86]];
+    const roof = [[-0.5, 1.4], [0.5, 1.4], [1.26, 0.76], [1.4, 0.14], [1.4, -2.18], [-1.4, -2.18], [-1.4, 0.14], [-1.26, 0.76]];
+    addMesh(turret, loftPrism(base, 0.3, shoulder, 2.32), M);
+    addMesh(turret, loftPrism(shoulder, 2.32, roof, 2.56), M);
+    // Rear overhang lip and a weld seam round the walls
+    addMesh(turret, Box(3.5, 0.1, 0.16), D, 0, 2.2, -2.42);
+    [-1, 1].forEach(s => addMesh(turret, Box(0.04, 0.05, 2.8), D, s * wallX(1.2), 1.2, -1.0));
 
-    // Pointer / trainer sight hoods and the mount captain's hatch
-    [-0.95, 0.95].forEach(x => addMesh(turret, Box(0.42, 0.32, 0.8), MAT.gray, x, 2.76, 0.2));
-    addMesh(turret, Cyl(0.38, 0.4, 0.16, 14), MAT.gray, 0.4, 2.68, -1.2);
-    // Rear door, ladder rungs, rivet band
-    addMesh(turret, Box(0.9, 1.5, 0.06), MAT.grayDark, -0.3, 1.25, -2.31);
-    for (let i = 0; i < 4; i++) addMesh(turret, Box(0.45, 0.04, 0.08), MAT.metal, 0.95, 0.75 + i * 0.45, -2.33);
-    addMesh(turret, Box(0.08, 0.08, 3.0), MAT.grayDark, 1.66, 0.55, -0.7);
-    addMesh(turret, Box(0.08, 0.08, 3.0), MAT.grayDark, -1.66, 0.55, -0.7);
+    // Gun slot up the glacis and back over the roof, closed by a lumpy canvas blast bag
+    addMesh(turret, Box(0.62, 1.5, 0.3), K, 0, 1.55, 1.78).rotation.x = -0.27;
+    addMesh(turret, Box(0.62, 0.06, 0.95), K, 0, 2.55, 1.05);
+    const bagPath = new THREE.CatmullRomCurve3([
+        new THREE.Vector3(0, 1.05, 1.98), new THREE.Vector3(0, 1.75, 1.84), new THREE.Vector3(0, 2.35, 1.6),
+        new THREE.Vector3(0, 2.62, 1.2), new THREE.Vector3(0, 2.66, 0.62)
+    ]);
+    const bag = new THREE.TubeGeometry(bagPath, 20, 0.3, 12, false);
+    const bp = bag.attributes.position, c0 = new THREE.Vector3();
+    for (let i = 0; i < bp.count; i++) {
+        // Squash into the slot and add folds so it reads as slack canvas
+        const x = bp.getX(i), y = bp.getY(i), z = bp.getZ(i);
+        const u = Math.floor(i / 13) / 20;
+        bagPath.getPointAt(Math.min(1, u), c0);
+        const fold = 1 + 0.13 * Math.sin(u * 47 + x * 9) + 0.07 * Math.sin(u * 113 + y * 5);
+        bp.setXYZ(i, x * 0.95 * fold, c0.y + (y - c0.y) * 0.62 * fold, c0.z + (z - c0.z) * 0.62 * fold);
+    }
+    bag.computeVertexNormals();
+    addMesh(turret, bag, MAT.canvasBag);
 
-    // Gun — 5"/38 barrel, canvas blast bag at the gun port
+    // Pointer / trainer sight ports on the chamfered cheeks, with hoods
+    [-1, 1].forEach(s => {
+        const cheek = new THREE.Group();
+        cheek.position.set(s * 1.06, 1.92, 1.33);
+        cheek.rotation.set(-0.23, s * 0.8, 0, 'YXZ');   // face the chamfer and lean with it
+        turret.add(cheek);
+        addMesh(cheek, Box(0.4, 0.3, 0.05), K, 0, 0, 0.03);
+        addMesh(cheek, Box(0.52, 0.06, 0.22), M, 0, 0.2, 0.1);
+        addMesh(cheek, Box(0.34, 0.22, 0.05), K, 0, -0.62, 0.02);   // lower port
+        // Side ports and a small ventilator box
+        addMesh(turret, Box(0.05, 0.28, 0.4), K, s * wallX(1.75), 1.75, 0.05);
+        addMesh(turret, Box(0.05, 0.22, 0.3), K, s * wallX(1.25), 1.25, -0.6);
+        addMesh(turret, Box(0.18, 0.5, 0.5), D, s * (wallX(0.9) + 0.08), 0.9, -1.55);
+    });
+
+    // Roof: sight hoods either side of the slot, mount captain's hatch, access hatch, periscope stub
+    [-1, 1].forEach(s => {
+        addMesh(turret, Box(0.46, 0.36, 0.72), M, s * 0.88, 2.74, 0.62);
+        addMesh(turret, Box(0.34, 0.16, 0.04), K, s * 0.88, 2.78, 0.99);
+    });
+    addMesh(turret, Cyl(0.36, 0.4, 0.14, 16), D, 0.7, 2.63, -1.25);
+    addMesh(turret, Box(0.8, 0.08, 0.6), D, -0.65, 2.6, -1.4);
+    addMesh(turret, Cyl(0.08, 0.08, 0.3, 8), MAT.gunMetal, -0.25, 2.7, -0.4);
+
+    // Rear door, grab rails and ladder rungs
+    addMesh(turret, Box(0.9, 1.5, 0.06), D, -0.35, 1.1, -2.44);
+    for (let i = 0; i < 4; i++) addMesh(turret, Box(0.45, 0.04, 0.08), MAT.metal, 0.95, 0.65 + i * 0.42, -2.47);
+    [-1, 1].forEach(s => addMesh(turret, Box(0.04, 0.04, 1.6), MAT.metal, s * (wallX(2.0) + 0.05), 2.0, -1.2));
+
+    // Gun: painted 5"/38 barrel with a slight taper, muzzle swell and a canvas sleeve at the slot
     const pivot = new THREE.Group();
     pivot.position.set(0, 1.55, 1.0);
     turret.add(pivot);
-    const barrelGeo = CylZ(0.105, 0.15, 4.9, 14);
+    const barrelGeo = CylZ(0.1, 0.15, 4.9, 16);
     barrelGeo.translate(0, 0, 2.65);
-    addMesh(pivot, barrelGeo, MAT.gunMetal);
-    addMesh(pivot, CylZ(0.125, 0.125, 0.18, 14), MAT.gunMetal, 0, 0, 5.02);
-    addMesh(pivot, CylZ(0.27, 0.34, 0.8, 12), MAT.canvas, 0, 0, 0.75);
+    addMesh(pivot, barrelGeo, MAT.turretDark);
+    addMesh(pivot, CylZ(0.125, 0.115, 0.22, 16), MAT.turretDark, 0, 0, 5.0);
+    addMesh(pivot, CylZ(0.2, 0.2, 0.3, 14), MAT.turretDark, 0, 0, 1.1);
+    addMesh(pivot, CylZ(0.24, 0.3, 0.7, 12), MAT.canvasBag, 0, 0, 0.8);
 
     turret.userData.barrel = pivot;
     return turret;

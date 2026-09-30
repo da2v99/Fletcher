@@ -28,6 +28,8 @@ window.addEventListener('load', () => {
     initTorpedoes();
     initPlayerWeapons();
     initCaptainInput();
+    initThirdPersonAim();
+    initCameraInput();
     initMenus();
     initKeys();
     applyWeather();
@@ -59,6 +61,7 @@ function initRenderer() {
     controls.maxPolarAngle = Math.PI / 2 - 0.02;
     controls.minDistance = 8;
     controls.maxDistance = 600;
+    controls.mouseButtons = { LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE };
     controls.enabled = false;
 
     ambLight = new THREE.AmbientLight(0xffffff, 0.22);
@@ -92,13 +95,18 @@ function initKeys() {
         if (!Game.running || Game.paused) return;
         if (k === 'a' || k === 'arrowleft') drive.left = true;
         if (k === 'd' || k === 'arrowright') drive.right = true;
-        if (k === ' ' && captain.active) { ensureAudio(); captain.trigger = true; }
+        if (k === ' ') { ensureAudio(); director.trigger = true; }
         if (e.repeat) return;
         if (k === 'w' || k === 'arrowup') drive.order = Math.min(ORDERS.length - 1, drive.order + 1);
         if (k === 's' || k === 'arrowdown') drive.order = Math.max(0, drive.order - 1);
-        if (k === 'x') drive.order = STOP_IDX;
+        if (k === '0') drive.order = STOP_IDX;
+        if (k === 'x') {
+            if (captain.active) toggleLock(window.innerWidth / 2, window.innerHeight / 2);
+            else if (tpAim.onCanvas) toggleLock(tpAim.x, tpAim.y);
+            else toggleLock();
+        }
         if (k === 'c') cycleCamera();
-        if (k === 'v') setCaptain(!captain.active);
+        if (k === 'b') setCaptain(!captain.active);
         if (k === 't') fireTorpedoes();
         if (k === 'h') ocean.visible = !ocean.visible;
         if (captain.active) {
@@ -107,12 +115,12 @@ function initKeys() {
             if (k === 'e') captain.station = Math.min(2, captain.station + 1);
         }
     });
-    window.addEventListener('blur', () => { drive.left = drive.right = false; captain.trigger = false; });
+    window.addEventListener('blur', () => { drive.left = drive.right = false; director.trigger = false; });
     window.addEventListener('keyup', e => {
         const k = e.key.toLowerCase();
         if (k === 'a' || k === 'arrowleft') drive.left = false;
         if (k === 'd' || k === 'arrowright') drive.right = false;
-        if (k === ' ') captain.trigger = false;
+        if (k === ' ') director.trigger = false;
     });
 }
 
