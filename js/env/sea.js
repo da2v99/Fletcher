@@ -14,17 +14,17 @@ const GOLDEN_RATIO = 1.61803398875, GOLDEN_ANGLE = 2.39996323;
 
 const SEA_DEFAULTS = {
     // World mapping
-    hs: 3.2,               // significant wave height, metres
-    autoScale: true,       // tie the wavelength scale to the wave height
-    scale: 0.21,           // metres per example unit when autoScale is off
+    hs: 1.7,               // significant wave height, metres
+    autoScale: false,      // tie the wavelength scale to the wave height
+    scale: 0.02,           // metres per example unit when autoScale is off (14 m peak wavelength)
     // Example: Gerstner set
-    spread: 0.15, steepness: 1.0, medAmplitude: 8, medWavelength: 390, speed: 5.0, windDir: 34,
+    spread: 0.155, steepness: 2.0, medAmplitude: 10.5, medWavelength: 700, speed: 5.0, windDir: 34,
     // Example: detail layer
-    sharp: 0.8, chop: 2.0, ripple: 0.0, asym: 1.0,
+    sharp: 0.0, chop: 0.0, ripple: 0.0, asym: 1.0,
     // Example: macro swell
-    macroOn: true, macroHeight: 58, macroSize: 0.2,
+    macroOn: true, macroHeight: 100, macroSize: 0.07,
     // Example: colouring
-    foam: 0.26, colorSpan: 0.5, depthBias: 1.5, deep: '#001e50', peak: '#50bef0'
+    foam: 0.52, colorSpan: 0.45, depthBias: 1.4, deep: '#001e41', peak: '#0082ff'
 };
 const SeaParams = Object.assign({}, SEA_DEFAULTS);
 
@@ -121,10 +121,11 @@ function exDetailRaw(x, z, t) {
     const P = SeaParams;
     const sp = P.speed * 0.5, sharp = P.sharp, chop = P.chop, ripple = P.ripple, asym = P.asym;
     const chopSharp = Math.max(sharp * 0.8, 0.4);
+    // pow() bases are floored above zero: asymmetry > 1.67 pushes |w3b| past 1, and pow(0, 0) is NaN on GPUs
     const w3 = Math.sin(x * 0.08 + t * 1.2 * sp) * Math.cos(z * 0.08 - t * 1.0 * sp);
     const w3b = Math.sin((x * 0.7 - z * 0.7) * 0.09 + t * 1.4 * sp) * 0.6 * asym;
-    const h3 = Math.pow(1 - Math.abs(w3), chopSharp) * chop;
-    const h3b = Math.pow(1 - Math.abs(w3b), chopSharp) * chop * 0.4;
+    const h3 = Math.pow(Math.max(1 - Math.abs(w3), 1e-5), chopSharp) * chop;
+    const h3b = Math.pow(Math.max(1 - Math.abs(w3b), 1e-5), chopSharp) * chop * 0.4;
     const h4 = Math.sin(x * 0.2 - t * 2.0 * sp) * ripple;
     const h4b = Math.sin((x * 0.15 + z * 0.25) + t * 1.7 * sp) * ripple * 0.5 * asym;
     const warpStr = 25 * asym;
@@ -138,8 +139,8 @@ function exDetailRaw(x, z, t) {
     const w2b = Math.sin(((x + wx) * 0.5 + (z + wy) * 0.87) * 0.019 + t * 0.6 * sp);
     const modA = Math.sin((x - z) * 0.004 + t * 0.2) * 0.5 + 0.5;
     const modB = Math.cos((x + z) * 0.005 - t * 0.2) * 0.5 + 0.5;
-    const hRidge1 = Math.pow(1 - Math.abs(w2a), sharp) * 14 * modA;
-    const hRidge2 = Math.pow(1 - Math.abs(w2b), sharp) * 14 * 0.6 * asym * modB;
+    const hRidge1 = Math.pow(Math.max(1 - Math.abs(w2a), 1e-5), sharp) * 14 * modA;
+    const hRidge2 = Math.pow(Math.max(1 - Math.abs(w2b), 1e-5), sharp) * 14 * 0.6 * asym * modB;
     return h3 + h3b + h4 + h4b + h5 + hRidge1 + hRidge2;
 }
 
@@ -203,8 +204,8 @@ const SEA_GLSL = `
         float chopSharp = max(sharp * 0.8, 0.4);
         float w3 = sin(pos.x * 0.08 + t * 1.2 * sp) * cos(pos.y * 0.08 - t * 1.0 * sp);
         float w3b = sin((pos.x * 0.7 - pos.y * 0.7) * 0.09 + t * 1.4 * sp) * 0.6 * asym;
-        float h3 = pow(1.0 - abs(w3), chopSharp) * chop;
-        float h3b = pow(1.0 - abs(w3b), chopSharp) * chop * 0.4;
+        float h3 = pow(max(1.0 - abs(w3), 1e-5), chopSharp) * chop;
+        float h3b = pow(max(1.0 - abs(w3b), 1e-5), chopSharp) * chop * 0.4;
         float h4 = sin(pos.x * 0.2 - t * 2.0 * sp) * ripple;
         float h4b = sin((pos.x * 0.15 + pos.y * 0.25) + t * 1.7 * sp) * ripple * 0.5 * asym;
         float warpStr = 25.0 * asym;
@@ -218,8 +219,8 @@ const SEA_GLSL = `
         float w2b = sin(((pos.x + wx) * 0.5 + (pos.y + wy) * 0.87) * 0.019 + t * 0.6 * sp);
         float modA = sin((pos.x - pos.y) * 0.004 + t * 0.2) * 0.5 + 0.5;
         float modB = cos((pos.x + pos.y) * 0.005 - t * 0.2) * 0.5 + 0.5;
-        float hRidge1 = pow(1.0 - abs(w2a), sharp) * 14.0 * modA;
-        float hRidge2 = pow(1.0 - abs(w2b), sharp) * 14.0 * 0.6 * asym * modB;
+        float hRidge1 = pow(max(1.0 - abs(w2a), 1e-5), sharp) * 14.0 * modA;
+        float hRidge2 = pow(max(1.0 - abs(w2b), 1e-5), sharp) * 14.0 * 0.6 * asym * modB;
         return h3 + h3b + h4 + h4b + h5 + hRidge1 + hRidge2;
     }
 

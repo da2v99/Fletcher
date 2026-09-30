@@ -156,7 +156,7 @@ function createMaterials() {
         gray: measure22(std(HAZE_GRAY)),
         grayDark: std(0x6b737c),
         grayLight: std(0x969ea6),
-        turret: weathered(std(0x8f97a0, { roughness: 0.78 })),
+        turret: weathered(std(0x7f878f, { roughness: 0.85 })),
         turretDark: weathered(std(0x737b84, { roughness: 0.8 })),
         canvasBag: weathered(std(0xcbbd98, { roughness: 1.0, flatShading: false }), 0.8),
         deck: new THREE.MeshStandardMaterial({ color: DECK_BLUE, roughness: 0.95, metalness: 0.05, side: THREE.DoubleSide }),

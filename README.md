@@ -25,7 +25,7 @@ freezes the battle; the waves and ship keep moving so you can see each change li
 wave height (Hs, metres), wavelength scale (auto or manual), speed, wind direction; the example's Gerstner set
 (spread, steepness, swell vs detail, med wavelength); detail (sharpness, chop, ripple, asymmetry); macro swell
 (on/off, height, size); colour (deep and peak colours, foam threshold, colour span, depth bias). "Reset waves"
-restores the defaults while keeping the current wave height. Moving the Weather slider also sets the wave height.
+restores the defaults (1.7 m sea, 14 m peak wavelength, glassy blue swell) while keeping the current wave height. Moving the Weather slider also sets the wave height.
 
 ## Code layout (`js/`)
 | Folder | What lives there |
