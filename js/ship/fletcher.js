@@ -3,6 +3,8 @@
 // --- MAIN BUILD SHIP ---
 function buildShip(scene) {
     shipGroup = new THREE.Group();
+    const aaMounts = [];             // light AA, collected as they're built (aa.js crews them)
+    shipGroup.userData.aa = aaMounts;
     MAT = createMaterials();
     const rig = [];   // rigging line segments, added at the end
 
@@ -117,6 +119,7 @@ function buildShip(scene) {
         oer.position.set(s * 4.7, BRIDGE_Y, 25.2);
         oer.rotation.y = s * 0.6;
         shipGroup.add(oer);
+        aaMounts.push({ obj: oer, kind: 20, side: s, name: `20 mm ${s > 0 ? 'port' : 'stbd'} bridge wing` });
     });
 
     // Mk 37 director on its trunk behind the pilothouse
@@ -237,6 +240,7 @@ function buildShip(scene) {
         b.position.set(x, y, z);
         b.rotation.y = side * 0.5;
         shipGroup.add(b);
+        aaMounts.push({ obj: b, kind: 40, side, name: `40 mm ${side > 0 ? 'port' : 'stbd'} ${z > 0 ? 'forward' : 'waist'}` });
         return b;
     };
     [-1, 1].forEach(s => {
@@ -252,6 +256,7 @@ function buildShip(scene) {
     aft40.position.set(0, bandY, -27.6);
     aft40.rotation.y = Math.PI;
     shipGroup.add(aft40);
+    aaMounts.push({ obj: aft40, kind: 40, side: 0, name: '40 mm centreline aft' });
     const aftDir = createMk51(); aftDir.position.set(0, bandY, -29.8); shipGroup.add(aftDir);
     shipGroup.add(createRailing([{ pts: [
         new THREE.Vector3(-2.02, bandY, -26.2), new THREE.Vector3(-2.02, bandY, -30.4),
@@ -261,6 +266,8 @@ function buildShip(scene) {
     [-1, 1].forEach(s => {
         const o1 = createOerlikon(); o1.position.set(s * 2.9, lvl1(28.0), 28.0); o1.rotation.y = s * 0.5; shipGroup.add(o1);
         const o2 = createOerlikon(); o2.position.set(s * 3.2, sheerY(-52.5), -52.5); o2.rotation.y = Math.PI - s * 0.5; shipGroup.add(o2);
+        aaMounts.push({ obj: o1, kind: 20, side: s, name: `20 mm ${s > 0 ? 'port' : 'stbd'} 01 level` });
+        aaMounts.push({ obj: o2, kind: 20, side: s, name: `20 mm ${s > 0 ? 'port' : 'stbd'} fantail` });
     });
 
     // --- 8. ASW: K-guns and stern racks ---
@@ -448,6 +455,12 @@ function buildShip(scene) {
     shipGroup.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(rigPts), new THREE.LineBasicMaterial({ color: 0x2a2d30 })));
 
     shipGroup.traverse(o => { if (o.isMesh && o.castShadow === undefined) o.castShadow = true; });
+    // Hundreds of fittings -> a few dozen draw calls; everything that trains, elevates or turns stays movable
+    const ud = shipGroup.userData;
+    mergeStatic(shipGroup, [
+        ...ud.turrets, ...ud.turrets.map(t => t.userData.barrel), ...ud.torpMounts, ud.mk37,
+        ...ud.aa.map(a => a.obj), ...ud.aa.map(a => a.obj.userData.barrel), ...ud.props, ud.flag
+    ]);
     scene.add(shipGroup);
     return shipGroup;
 }

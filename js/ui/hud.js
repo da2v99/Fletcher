@@ -33,6 +33,9 @@ function drawRadar(dt) {
     [0.33, 0.66, 1].forEach(f => { ctx.beginPath(); ctx.arc(c, c, R * f, 0, Math.PI * 2); ctx.stroke(); });
     ctx.beginPath(); ctx.moveTo(c, c - R); ctx.lineTo(c, c + R); ctx.moveTo(c - R, c); ctx.lineTo(c + R, c); ctx.stroke();
 
+    // Land returns: the islands paint solid on the scope
+    Islands.drawRadar(ctx, c, R, radar.range, hdg);
+
     // Sweep with a fading tail
     for (let k = 0; k < 24; k++) {
         const a = radar.sweep - k * 0.03;
@@ -46,6 +49,7 @@ function drawRadar(dt) {
         return s1 >= s0 ? a > s0 && a <= s1 : a > s0 || a <= s1;
     };
     enemies.forEach(e => {
+        if (e.island) return;   // small craft under the land's clutter
         const dx = e.x - phys.pos.x, dz = e.z - phys.pos.z, d = Math.hypot(dx, dz);
         if (d > radar.range) return;
         const rel = (-(Math.atan2(dx, dz) - hdg) % (Math.PI * 2) + Math.PI * 4) % (Math.PI * 2);
@@ -66,6 +70,7 @@ function drawRadar(dt) {
         ctx.arc(c + Math.sin(p.rel) * r, c - Math.cos(p.rel) * r, 2 + p.size * 1.5, 0, Math.PI * 2);
         ctx.fill();
     });
+    Air.drawRadar(ctx, c, R, radar.range, hdg);
     // Own ship
     ctx.fillStyle = '#9fffb4';
     ctx.beginPath(); ctx.moveTo(c, c - 6); ctx.lineTo(c - 3, c + 4); ctx.lineTo(c + 3, c + 4); ctx.fill();
@@ -110,7 +115,7 @@ function updateHud(dt) {
 
     $('scoreVal').textContent = Game.score.toLocaleString();
     $('waveVal').textContent = Game.mode === 'patrol' ? Game.wave : '—';
-    $('contactsVal').textContent = enemies.filter(e => !e.sinking).length;
+    $('contactsVal').textContent = enemies.filter(e => !e.sinking && !e.island).length;
 
     if (captain.active) updateCaptainPanel();
 }
@@ -119,7 +124,7 @@ function updateCaptainPanel() {
     $('cpStation').textContent = STATION_NAMES[captain.station] + (captain.binoc ? ` · ${captain.mag.toFixed(0)}× binoculars` : '');
     let rangeTxt = 'RANGE ——';
     if (director.aimValid) {
-        const sol = firingSolution(director.aimRange);
+        const sol = firingSolution(director.aimRange, director.aim.y - GUN_H);
         rangeTxt = `RANGE ${Math.round(director.aimRange * 1.0936).toLocaleString()} yds` +
             (sol ? ` · TOF ${sol.tof.toFixed(1)} s` : ' · OUT OF RANGE') + (director.lock ? ` · LOCKED: ${director.lock.type.name.toUpperCase()}` : director.lockPoint ? ' · LOCKED ON POINT' : '');
     }

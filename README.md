@@ -1,24 +1,39 @@
 # Fletcher: Destroyer Command
 
-Command USS Fletcher (DD-445) against Japanese convoys in the Solomons, 1943.
+Command USS Fletcher (DD-445) in the Solomons, 1943: Japanese convoys and their escorts, shore batteries on the
+islands, and air raids. Plays on desktop and on phones (touch controls, gyro steering).
 
-**Run it:** open `index.html` in Chrome or Edge (double-click works; no build step). Three.js r128 and fonts load from CDNs.
-Or serve the folder: `python -m http.server 8123` and open http://localhost:8123/game/.
+**Run it:** open `index.html` in a browser (double-click works; no build step). Three.js r128 and fonts load from
+CDNs. Or serve the folder: `python -m http.server 8123` and open http://localhost:8123/. On a phone, "Add to Home
+Screen" runs it fullscreen.
 
 ## Controls
 | Key | Action |
 |---|---|
 | W / S | Step the engine-order telegraph (Back Full … Ahead Flank), 0 = All Stop |
 | A / D | Rudder (hold) |
-| Mouse | Third-person gun crosshair: the 5"/38s train on whatever is under it (a ship, the sea, or max range above the horizon) |
-| X | Lock what's under the crosshair: a ship is tracked with lead wherever you look, a point of sea stays put. X on the current lock releases it |
-| Space | Fire the 5"/38s at the director's target (also left-click in the captain's view) |
+| Mouse | Third-person gun crosshair: the 5"/38s train on whatever is under it (a ship, the shore, the sea, or max range above the horizon) |
+| X | Lock what's under the crosshair: a ship, a shore target (gun, AA pit, building, truck) or a plane is tracked with lead; a point of sea or shore stays put. X on the current lock releases it |
+| Space | Fire the 5"/38s at the director's target (also left-click in the captain's view). Locked on a plane they fire VT proximity-fuzed shells |
 | Left drag / right drag / wheel | Pan / orbit / zoom the camera (a drag in chase view switches to orbit) |
-| B | Captain's view on the bridge: mouse look, right-click / Z / wheel = binoculars, X locks the ship under the reticle |
+| B | Captain's view on the bridge: mouse look, right-click / Z / wheel = binoculars, X locks the target under the reticle |
+| G | Man an AA gun (the 40 mm or 20 mm that best covers the nearest plane). Mouse aims, click / Space fires, right mouse or Z zooms, Q / E next gun, X locks the plane in your sight for the 5"/38s, G leaves |
 | T | Train out a torpedo mount and fire a 5-torpedo spread |
-| Q / E | Move between port wing, open bridge, starboard wing |
-| C | Chase / orbit camera (leaves the captain's view) |
-| Esc / P | Pause, settings (time of day, weather, volume, and every wave parameter) |
+| Q / E | Move between port wing, open bridge, starboard wing (captain's view) |
+| C | Chase / orbit camera (leaves the captain's view or the AA gun) |
+| Esc / P | Pause, settings |
+
+**Touch:** a brass engine-order telegraph (drag the lever), a rudder slider or ship's wheel (or tilt the phone),
+FIRE (hold), LOCK, TORP, AA and VIEW buttons. Tap a target to lock it, drag to look around, pinch for the
+binoculars. On an AA gun: drag (or tilt, with gyro aim on) to aim, hold FIRE, EXIT to leave.
+
+**Settings** (main or pause menu), saved in the browser:
+- *Graphics:* presets from Low (phones) to Cinematic, render resolution, dynamic resolution and target frame rate,
+  ocean, island, cloud and shadow detail, effects density, and the cinematic pass: bloom, light shafts, sun flare,
+  colour grade, vignette, film grain, 2.39:1 letterbox, FXAA or MSAA.
+- *Controls:* touch controls on/off, steering (slider, wheel or gyro tilt), gyro aim, sensitivities, left-handed
+  layout, button size, vibration, AI gunners on the 40 mm / 20 mm, air raid frequency, telegraph bell.
+- *Sea & Weather* and *Sound* as below.
 
 **Weather & Sea settings** (main menu or pause menu) open as a side panel so the sea stays visible. Pausing only
 freezes the battle; the waves and ship keep moving so you can see each change live. Wave controls:
@@ -46,17 +61,34 @@ A rigid body floated by 57 buoyancy columns along the hull:
   and ride every wave; in very steep seas a hull under ~5 t can capsize, and a game assist rights it after 1.5 s.
 - The macro swell runs at deep-water speed for its wavelength (ω = √(gk)).
 
+## Islands
+Volcanic jungle islands and low palm islets, generated from a fixed seed in 8 km sectors and streamed in around the
+ship. Each is a height field: shells dig craters and scorch it, trees within a blast fall and burn, and the sea floor
+shoals up to the beach, so a ship can run aground (hard groundings tear the bottom open). About two in five have a
+Japanese base: two coastal guns that engage you out to 12 km once alerted, 25 mm AA pits and machine-gun pillboxes
+firing tracers at close range, barracks, warehouses, fuel tanks that go up in a fireball, a radio mast, a lookout
+tower, trucks on the camp road, soldiers who run for cover, and landing barges that flee along the coast. Every third
+engagement on patrol is a shore bombardment: silence the battery while a destroyer guards the approaches.
+
+## Air raids and AA
+Every few minutes a raid comes in on radar: Aichi D3A "Val" dive bombers push over from ~3,400 m into a 55-60° dive
+and release at ~500 m; Nakajima B5N "Kate" torpedo bombers drop Type 91 aerial torpedoes (42 kn, ~2 km run) at about
+1,000 m off the beam; Zeros strafe with 20 mm and 7.7 mm. Hard turns throw off the dive bombers; comb the torpedo
+tracks. The five twin 40 mm Bofors and six 20 mm Oerlikons are crewed by AI gunners (they lead the target for time of
+flight and drop, need a moment to get on, and can't fire into the ship), or take a gun yourself.
+
 ## Code layout (`js/`)
 | Folder | What lives there |
 |---|---|
-| `core/` | Ship constants, math helpers, geometry helpers |
+| `core/` | Ship constants, math helpers, geometry helpers, saved settings and graphics presets |
 | `ship/` | The Fletcher model: hull lines, fittings, assembly |
 | `env/` | `sea.js` wave model (shared by GPU and CPU), `ocean.js` surface shader, `clouds.js` volumetric sky, `weather.js`, `shipWaves.js` (Kelvin wake) |
 | `physics/` | Rigid-body buoyancy and handling, flooding |
-| `fx/` | Particles (spray, smoke, fire) and synthesised audio |
-| `combat/` | Ballistics and shells, torpedoes, enemy models and AI, our weapons, damage model |
+| `fx/` | Particles (spray, smoke, fire), tracers, synthesised audio, post-processing and the renderer |
+| `combat/` | Ballistics and shells, torpedoes, enemy ship models and AI, aircraft and air raids, our 5"/38s, torpedoes and AA battery, damage model |
+| `world/` | Islands: terrain, jungle, bases and their garrisons |
 | `view/` | Cameras and the captain's binocular view |
-| `ui/` | HUD, SG radar scope, menus |
+| `ui/` | HUD, SG radar scope, menus, settings panel, touch controls |
 | `game.js`, `main.js` | Game flow and the main loop |
 
 Scripts are plain (non-module) files loaded in order by `index.html`, so the game also runs straight from disk.

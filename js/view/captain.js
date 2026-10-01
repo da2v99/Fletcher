@@ -58,6 +58,9 @@ function drawOverlay() {
     const ctx = overlayCtx, w = overlay.width, h = overlay.height;
     ctx.clearRect(0, 0, w, h);
     if (!Game.running) return;
+    if (AA.manned) { AA.drawSight(ctx, w, h); drawLockBracket(ctx, w, h); return; }
+    drawObjectiveMarker(ctx, w, h);
+    Air.drawMarkers(ctx, w, h);
     if (!captain.active) {
         drawLockBracket(ctx, w, h);
         drawThirdPersonCrosshair(ctx);
@@ -118,8 +121,9 @@ function initCaptainInput() {
     const el = renderer.domElement;
     document.addEventListener('pointerlockchange', () => { captain.locked = document.pointerLockElement === el; });
     el.addEventListener('contextmenu', e => { if (captain.active) e.preventDefault(); });
-    el.addEventListener('mousedown', e => {
-        if (!captain.active || !Game.running) return;
+    // Mouse only: touch screens look around by dragging (touch.js)
+    el.addEventListener('pointerdown', e => {
+        if (e.pointerType !== 'mouse' || !captain.active || !Game.running) return;
         ensureAudio();
         if (!captain.locked && el.requestPointerLock) {
             el.requestPointerLock();
@@ -129,14 +133,15 @@ function initCaptainInput() {
         if (e.button === 0) director.trigger = true;
         if (e.button === 2) captain.binoc = true;
     });
-    window.addEventListener('mouseup', e => {
+    window.addEventListener('pointerup', e => {
+        if (e.pointerType !== 'mouse') return;
         captain.dragging = false;
         if (e.button === 0 && captain.active) director.trigger = false;
         if (e.button === 2 && captain.locked) captain.binoc = false;
     });
     window.addEventListener('mousemove', e => {
-        if (!captain.active || (!captain.locked && !captain.dragging)) return;
-        const sens = 0.0022 * captain.fov / 55;
+        if (!captain.active || (!captain.locked && !captain.dragging) || !Number.isFinite(e.movementX)) return;
+        const sens = 0.0022 * captain.fov / 55 * Settings.ctl.lookSens;
         captain.yaw -= e.movementX * sens;
         captain.pitch = THREE.MathUtils.clamp(captain.pitch - e.movementY * sens, -1.2, 1.2);
     });

@@ -3,7 +3,8 @@
 
 const TORP_TYPES = {
     mk15: { speed: 23.2, range: 5500, damage: 10, depth: 3 },
-    type93: { speed: 24.7, range: 11000, damage: 38, depth: 4 }
+    type93: { speed: 24.7, range: 11000, damage: 38, depth: 4 },
+    type91: { speed: 21.6, range: 2000, damage: 30, depth: 3 }        // aerial, dropped by Kates (42 kn)
 };
 const torpedoes = [];
 let torpGeo, torpMat;
@@ -49,7 +50,15 @@ function updateTorpedoes(dt, t) {
         }
 
         let hit = null;
-        if (tp.owner === 'player') {
+        // Into the shallows: the warhead goes off on the bottom or the beach
+        const ground = Islands.groundAt(tp.pos.x, tp.pos.z);
+        if (ground > tp.pos.y - 0.6) {
+            const p = tp.pos.clone().setY(Math.max(surface, ground));
+            if (ground > surface) FX.dirt(p, 2.5); else FX.waterColumn(p);
+            playBoom(p, 1.6, 400, 3.5);
+            Islands.impact(p, 2.5, null, tp.owner === 'player');
+            hit = true;
+        } else if (tp.owner === 'player') {
             hit = enemyHitTest(tp.pos, 3);
             if (hit) onEnemyTorpedoHit(hit, tp.pos.clone().setY(surface));
         } else {

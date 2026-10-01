@@ -2,7 +2,13 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#0b1520">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Fletcher">
+    <link rel="manifest" href="manifest.json">
     <title>Fletcher: Destroyer Command</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -13,6 +19,7 @@
 </head>
 <body>
     <div id="loading">Raising steam…</div>
+    <div id="gfxReset"><div>The graphics driver was reset.<br><small>Graphics lowered one level. Reloading…</small></div></div>
     <div id="canvas-container"></div>
     <canvas id="overlay"></canvas>
 
@@ -29,9 +36,9 @@
     <div id="helm" class="panel">
         <div class="row"><span class="lbl">SPEED</span><span id="hudSpeed" class="big">0.0</span><span class="unit">kn</span></div>
         <div class="row"><span class="lbl">HEADING</span><span id="hudHeading" class="big">000</span><span class="unit">°</span></div>
-        <div class="lbl">ENGINES</div>
+        <div class="lbl englbl">ENGINES</div>
         <div id="hudOrder" class="order">All Stop</div>
-        <div class="lbl">RUDDER</div>
+        <div class="lbl rudlbl">RUDDER</div>
         <div class="rudder-bar"><div id="rudderNeedle"></div></div>
         <div id="hudRudder" class="sub">Amidships</div>
         <div class="lbl" style="margin-top:8px">HULL <span id="hullPct" class="pct">100%</span></div>
@@ -45,9 +52,9 @@
 
     <div id="keys" class="panel">
         <b>W/S</b> engine order · <b>0</b> all stop · <b>A/D</b> rudder<br>
-        <b>Mouse</b> crosshair · <b>X</b> lock ship · <b>Space</b> fire · <b>T</b> torpedoes<br>
+        <b>Mouse</b> crosshair · <b>X</b> lock target · <b>Space</b> fire · <b>T</b> torpedoes<br>
         <b>LMB</b> pan · <b>RMB</b> orbit · <b>Wheel</b> zoom · <b>C</b> chase / orbit<br>
-        <b>B</b> captain's view · <b>Esc</b> pause
+        <b>B</b> captain's view · <b>G</b> AA gun · <b>Esc</b> pause
     </div>
 
     <div id="captainPanel">
@@ -55,7 +62,7 @@
         <div id="cpRange">RANGE ——</div>
         <div id="cpBearing"></div>
         <div id="cpGuns"></div>
-        <div id="cpHelp">Click to take the binoculars · Mouse: look · Right-click / Z / Wheel: binoculars &amp; zoom · X: lock / release ship · Left-click / Space: fire · T: torpedoes · Q / E: station · B: leave</div>
+        <div id="cpHelp">Click to take the binoculars · Mouse: look · Right-click / Z / Wheel: binoculars &amp; zoom · X: lock / release target · Left-click / Space: fire · T: torpedoes · Q / E: station · G: AA gun · B: leave</div>
     </div>
 
     <!-- ===== Menus ===== -->
@@ -64,7 +71,7 @@
             <div class="kicker">The Slot · Solomon Islands · 1943</div>
             <h1>FLETCHER</h1>
             <div class="subtitle">Destroyer Command</div>
-            <p>Take USS Fletcher (DD-445) against Japanese convoys and their escorts. Hunt them on radar, range them through the binoculars, and put five 5-inch guns and ten torpedoes to work. Mind the Long Lances.</p>
+            <p>Take USS Fletcher (DD-445) against Japanese convoys and their escorts, shore batteries and air raids. Hunt them on radar, range them through the binoculars, put five 5-inch guns and ten torpedoes to work, and man the 40 mm when the Vals come in. Mind the Long Lances and the shoals.</p>
             <button id="btnPatrol" class="btn primary">Begin Patrol</button>
             <button id="btnCruise" class="btn">Free Cruise</button>
             <button id="btnSettings" class="btn ghost">Weather &amp; Settings</button>
@@ -72,12 +79,14 @@
                 <span>W / S</span><span>Ring up engine orders</span>
                 <span>A / D</span><span>Rudder left / right</span>
                 <span>Mouse</span><span>Gun crosshair (guns follow it)</span>
-                <span>X</span><span>Lock the ship under the crosshair</span>
+                <span>X</span><span>Lock the ship, shore target or plane under the crosshair</span>
                 <span>Space</span><span>Fire the 5"/38s</span>
                 <span>B</span><span>Captain's view: binoculars and gun director</span>
                 <span>T</span><span>Launch a 5-torpedo spread</span>
+                <span>G</span><span>Man an AA gun (Q / E: next gun)</span>
                 <span>LMB / RMB</span><span>Pan / orbit the camera (C: back to chase)</span>
             </div>
+            <div class="touch-help">Drag the telegraph lever for speed · steer with the rudder slider, the wheel or by tilting the phone (Settings › Controls) · tap a target to lock it · hold FIRE · AA puts you on a 40 mm gun · VIEW for the bridge binoculars</div>
         </div>
     </div>
 
@@ -92,19 +101,31 @@
 
     <div id="settingsMenu" class="screen">
         <div class="menu-card settings">
-            <h2>Weather &amp; Sea</h2>
+            <div class="tabs">
+                <button class="tab on" data-tab="gfx">Graphics</button>
+                <button class="tab" data-tab="ctl">Controls</button>
+                <button class="tab" data-tab="sea">Sea &amp; Weather</button>
+                <button class="tab" data-tab="snd">Sound</button>
+            </div>
             <div class="settings-scroll">
-                <h3>Weather</h3>
-                <div class="ctl range"><label>Time of day <b id="setTimeVal"></b></label>
-                    <input id="setTime" type="range" min="5.4" max="13" step="0.05" value="6.4"></div>
-                <div class="ctl range"><label>Weather <b id="setWeatherVal"></b></label>
-                    <input id="setWeather" type="range" min="0" max="1" step="0.01" value="0.6"></div>
-                <div class="ctl range"><label>Volume <b id="setVolumeVal"></b></label>
-                    <input id="setVolume" type="range" min="0" max="1" step="0.05" value="0.8"></div>
-                <div id="seaControls"></div>
+                <div id="tab_gfx" class="tabpane on"></div>
+                <div id="tab_ctl" class="tabpane"></div>
+                <div id="tab_sea" class="tabpane">
+                    <h3>Weather</h3>
+                    <div class="ctl range"><label>Time of day <b id="setTimeVal"></b></label>
+                        <input id="setTime" type="range" min="5.4" max="18.6" step="0.05" value="6.4"></div>
+                    <div class="ctl range"><label>Weather <b id="setWeatherVal"></b></label>
+                        <input id="setWeather" type="range" min="0" max="1" step="0.01" value="0.6"></div>
+                    <div id="seaControls"></div>
+                    <div class="settings-buttons inline"><button id="btnSeaReset" class="btn ghost">Reset waves</button></div>
+                </div>
+                <div id="tab_snd" class="tabpane">
+                    <h3>Sound</h3>
+                    <div class="ctl range"><label>Volume <b id="setVolumeVal"></b></label>
+                        <input id="setVolume" type="range" min="0" max="1" step="0.05" value="0.8"></div>
+                </div>
             </div>
             <div class="settings-buttons">
-                <button id="btnSeaReset" class="btn ghost">Reset waves</button>
                 <button id="btnSettingsBack" class="btn primary">Back</button>
             </div>
         </div>
@@ -123,6 +144,7 @@
     <!-- Core -->
     <script src="js/core/config.js"></script>
     <script src="js/core/math.js"></script>
+    <script src="js/core/settings.js"></script>
     <script src="js/core/geometry.js"></script>
     <!-- Ship model -->
     <script src="js/ship/hullLines.js"></script>
@@ -138,18 +160,26 @@
     <!-- Simulation -->
     <script src="js/physics/shipPhysics.js"></script>
     <script src="js/fx/particles.js"></script>
+    <script src="js/fx/tracers.js"></script>
     <script src="js/fx/audio.js"></script>
+    <script src="js/fx/post.js"></script>
     <script src="js/combat/ballistics.js"></script>
     <script src="js/combat/torpedoes.js"></script>
     <script src="js/combat/enemyModels.js"></script>
     <script src="js/combat/enemies.js"></script>
     <script src="js/combat/damage.js"></script>
     <script src="js/combat/playerWeapons.js"></script>
+    <!-- World -->
+    <script src="js/world/islands.js"></script>
+    <script src="js/combat/air.js"></script>
+    <script src="js/combat/aa.js"></script>
     <!-- View, UI, game -->
     <script src="js/view/aiming.js"></script>
     <script src="js/view/captain.js"></script>
     <script src="js/view/cameras.js"></script>
     <script src="js/ui/hud.js"></script>
+    <script src="js/ui/settingsUI.js"></script>
+    <script src="js/ui/touch.js"></script>
     <script src="js/ui/menus.js"></script>
     <script src="js/game.js"></script>
     <script src="js/main.js"></script>

@@ -28,7 +28,7 @@ const SEA_DEFAULTS = {
     // Example: colouring
     foam: 0.52, colorSpan: 0.45, depthBias: 1.4, deep: '#001e41', peak: '#0082ff'
 };
-const SeaParams = Object.assign({}, SEA_DEFAULTS);
+const SeaParams = Object.assign({}, SEA_DEFAULTS, Settings.sea || {});   // the player's tuned sea, if saved
 
 const Sea = {
     hs: 0, S: 0.2, V: 0.03, T: 0.4, macroT: 1, maxAmp: 0, detailMean: 0,

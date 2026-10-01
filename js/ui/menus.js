@@ -20,7 +20,7 @@ function showBanner(title, sub) {
 
 function openSettings(from) {
     settingsReturn = from;
-    refreshSeaControls();
+    refreshSettingsUI();
     showScreen('settingsMenu');
 }
 
@@ -65,61 +65,24 @@ const SEA_CONTROLS = [
     { key: 'depthBias', label: 'Depth bias', min: 0.5, max: 4, step: 0.1, fmt: v => v.toFixed(1) }
 ];
 
-function buildSeaControls() {
-    const box = $('seaControls');
-    box.innerHTML = '';
-    SEA_CONTROLS.forEach(c => {
-        if (c.section) {
-            const h = document.createElement('h3');
-            h.textContent = c.section;
-            box.appendChild(h);
-            return;
-        }
-        const row = document.createElement('div');
-        row.className = 'ctl ' + (c.type || 'range');
-        const id = 'sea_' + c.key;
-        if (c.type === 'check') {
-            row.innerHTML = `<label for="${id}">${c.label}</label><input id="${id}" type="checkbox">`;
-        } else if (c.type === 'color') {
-            row.innerHTML = `<label for="${id}">${c.label}</label><input id="${id}" type="color">`;
-        } else {
-            row.innerHTML = `<label for="${id}">${c.label} <b id="${id}_v"></b></label><input id="${id}" type="range" min="${c.min}" max="${c.max}" step="${c.step}">`;
-        }
-        box.appendChild(row);
-        const el = row.querySelector('input');
-        el.addEventListener('keydown', e => e.preventDefault());   // keep the keyboard for the ship
-        el.addEventListener('input', () => {
-            SeaParams[c.key] = c.type === 'check' ? el.checked : c.type === 'color' ? el.value : parseFloat(el.value);
-            buildSea();
-            refreshSeaControls();
-        });
-    });
-}
-
-// Push SeaParams back into the widgets (after weather changes, resets, or auto-scale updates)
-function refreshSeaControls() {
-    SEA_CONTROLS.forEach(c => {
-        if (c.section) return;
-        const el = $('sea_' + c.key);
-        if (!el) return;
-        const v = SeaParams[c.key];
-        if (c.type === 'check') el.checked = v;
-        else if (c.type === 'color') el.value = v;
-        else {
-            if (document.activeElement !== el) el.value = v;
-            $('sea_' + c.key + '_v').textContent = c.fmt(v);
-        }
-        if (c.disabledBy) {
+// The sea tab: every SEA_CONTROLS entry edits SeaParams live
+function seaItems() {
+    return SEA_CONTROLS.map(c => c.section ? c : Object.assign({}, c, {
+        get: () => SeaParams[c.key],
+        set: v => { SeaParams[c.key] = v; buildSea(); },
+        disabled: c.disabledBy ? () => {
             const neg = c.disabledBy.startsWith('!');
             const flag = SeaParams[c.disabledBy.replace('!', '')];
-            el.disabled = neg ? !flag : flag;
-        }
-    });
+            return neg ? !flag : flag;
+        } : undefined
+    }));
 }
+// Kept for callers that changed SeaParams directly (weather slider, reset)
+function refreshSeaControls() { refreshSettingsUI(); }
 
 function initMenus() {
-    $('btnPatrol').onclick = () => Game.start('patrol');
-    $('btnCruise').onclick = () => Game.start('cruise');
+    $('btnPatrol').onclick = () => { goFullscreenLandscape(); Game.start('patrol'); };
+    $('btnCruise').onclick = () => { goFullscreenLandscape(); Game.start('cruise'); };
     $('btnSettings').onclick = () => openSettings('mainMenu');
     $('btnResume').onclick = () => Game.setPaused(false);
     $('btnPauseSettings').onclick = () => openSettings('pauseMenu');
@@ -131,15 +94,23 @@ function initMenus() {
         const { hs, massPos } = SeaParams;
         Object.assign(SeaParams, SEA_DEFAULTS, { hs, massPos });
         buildSea();
-        refreshSeaControls();
+        Settings.save();
+        refreshSettingsUI();
     };
 
-    buildSeaControls();
+    buildPane($('seaControls'), seaItems());
+    initSettingsUI();
+    // Restore the weather the player left
+    if (Settings.weather) {
+        $('setTime').value = Settings.weather.hour;
+        $('setWeather').value = Settings.weather.storm;
+    }
+    $('setVolume').value = Settings.audio.volume;
 
     const bind = (id, labelId, fn, fmt) => {
         const el = $(id);
         const apply = () => { const v = parseFloat(el.value); fn(v); $(labelId).textContent = fmt(v); };
-        el.addEventListener('input', apply);
+        el.addEventListener('input', () => { apply(); Settings.save(); });
         el.addEventListener('keydown', e => e.preventDefault());
         apply();
     };
@@ -153,6 +124,6 @@ function initMenus() {
         refreshSeaControls();
         applyWeather();
     }, weatherLabel);
-    bind('setVolume', 'setVolumeVal', v => setVolume(v), v => Math.round(v * 100) + '%');
-    refreshSeaControls();
+    bind('setVolume', 'setVolumeVal', v => { setVolume(v); Settings.audio.volume = v; }, v => Math.round(v * 100) + '%');
+    refreshSettingsUI();
 }

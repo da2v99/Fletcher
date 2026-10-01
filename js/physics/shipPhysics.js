@@ -79,7 +79,26 @@ const phys = {
     floodPoint: new THREE.Vector3(0, -2, 0),   // where that water sits (drives list and trim)
     engine: 1                                  // fraction of full power still available
 };
-const drive = { order: STOP_IDX, thrust: 0, rudder: 0, left: false, right: false };
+// cmd: an analog rudder order in degrees (touch slider, wheel or tilt); A / D keys override it while held
+const drive = { order: STOP_IDX, thrust: 0, rudder: 0, left: false, right: false, cmd: null };
+
+// Ring up an engine order (keyboard, telegraph lever): bell and a haptic click when it changes
+function setEngineOrder(i) {
+    i = Math.max(0, Math.min(ORDERS.length - 1, i));
+    if (i === drive.order) return;
+    drive.order = i;
+    if (typeof playBell === 'function' && Settings.ctl.bell) playBell(i);
+    if (typeof haptic === 'function') haptic(12);
+}
+
+// Steady speed (m/s) each engine order settles at in calm water, for the telegraph's speed scale
+function orderSpeed(i) {
+    const f = ORDERS[i].f;
+    const T = Math.sign(f) * T_MAX * f * f * (f < 0 ? 0.6 : 1);
+    const a = Math.abs(T);
+    const u = (-2e4 + Math.sqrt(4e8 + 4 * K_DRAG * a)) / (2 * K_DRAG);
+    return Math.sign(T) * u;
+}
 
 function initPhysics() {
     const dz = 6;
@@ -145,7 +164,7 @@ function resetPhysics() {
     phys.flood = 0;
     phys.floodPoint.set(0, -2, 0);
     phys.engine = 1;
-    Object.assign(drive, { order: STOP_IDX, thrust: 0, rudder: 0, left: false, right: false });
+    Object.assign(drive, { order: STOP_IDX, thrust: 0, rudder: 0, left: false, right: false, cmd: null });
 }
 
 function stepPhysics(dt, t) {
@@ -161,6 +180,48 @@ function stepPhysics(dt, t) {
     const n = Math.max(1, Math.ceil(dt * 1.4 / Math.sqrt(s) / 0.25));
     for (let i = 0; i < n; i++) stepPhysicsOnce(dt / n, t + dt * i / n, s);
     capsizeAssist(dt);
+    groundShip(dt);
+}
+
+// Running aground: keel points that touch the bottom are pushed back toward deep water, the hull grinds to a
+// stop on the shoal, and hitting it hard tears the bottom open. The sea still floats the ship; the bottom only
+// stops it and shoves it off.
+const GROUND_PTS = [[0, 56], [0, 46], [3.4, 32], [-3.4, 32], [5.6, 6], [-5.6, 6], [5.0, -24], [-5.0, -24], [0, -50]];
+const _gp = new THREE.Vector3(), _gn = new THREE.Vector3();
+let groundMsgT = -99;
+function groundShip(dt) {
+    if (typeof Islands === 'undefined' || !Islands.near(phys.pos.x, phys.pos.z, 120)) return;
+    let hits = 0, worst = 0, hitZ = 0;
+    for (const [lx, lz] of GROUND_PTS) {
+        _gp.set(lx, KEEL_Y + 0.4, lz).applyQuaternion(phys.quat).add(phys.pos);
+        const pen = Islands.groundAt(_gp.x, _gp.z) - _gp.y;
+        if (pen <= 0) continue;
+        hits++;
+        const n = Islands.normalAt(_gp.x, _gp.z, _gn);
+        let hx = n.x, hz = n.z;
+        const hl = Math.hypot(hx, hz);
+        if (hl < 0.03) { hx = -Math.sin(phys.heading); hz = -Math.cos(phys.heading); } else { hx /= hl; hz /= hl; }
+        // No more motion into the slope, and a firm shove back down it
+        const vn = phys.vel.x * hx + phys.vel.z * hz;
+        if (vn < 0) { phys.vel.x -= vn * hx; phys.vel.z -= vn * hz; if (-vn > worst) { worst = -vn; hitZ = lz; } }
+        const k = Math.min(pen, 3);
+        phys.vel.x += hx * k * 1.2 * dt; phys.vel.z += hz * k * 1.2 * dt;
+        phys.pos.x += hx * Math.min(pen, 2) * 0.4 * dt; phys.pos.z += hz * Math.min(pen, 2) * 0.4 * dt;
+    }
+    if (!hits) return;
+    const f = Math.exp(-dt * 0.7 * hits);
+    phys.vel.x *= f; phys.vel.z *= f;
+    phys.yawRate *= Math.exp(-dt * 1.6 * hits);
+    if (worst > 1.0 && typeof Game !== 'undefined' && Game.running && simTime - groundMsgT > 4) {
+        groundMsgT = simTime;
+        const hard = worst > 5;
+        playerDmg.hull -= Math.min(30, (worst - 0.8) * (hard ? 1.8 : 1.2));
+        addFlood(_gp.set(0, -3, hitZ), Math.min(450000, 9000 * worst * (hard ? 2 : 1)));
+        hudMessage(hard ? 'RAN AGROUND at speed! The bottom is torn open — flooding!' : 'Ran aground! Hull damage — back her off the shoal.', 'alert');
+        cameraShake(Math.min(3, 0.6 + worst * 0.35));
+        playBoom(phys.pos, 1.3, 220, 3);
+        if (typeof haptic === 'function') haptic(120);
+    }
 }
 
 // Game assist, not physics: the hull's stability is real (righting arm peaks near 40° and vanishes near 72°,
@@ -327,7 +388,9 @@ function updateDrive(dt) {
     const f = ORDERS[drive.order].f;
     const target = Math.sign(f) * T_MAX * f * f * (f < 0 ? 0.6 : 1);
     drive.thrust += (target - drive.thrust) * Math.min(1, dt / 4);   // engine spool-up lag
-    const rTarget = (drive.right ? RUDDER_MAX : 0) - (drive.left ? RUDDER_MAX : 0);
+    const keys = drive.left || drive.right;
+    const rTarget = keys || drive.cmd === null ? (drive.right ? RUDDER_MAX : 0) - (drive.left ? RUDDER_MAX : 0)
+        : THREE.MathUtils.clamp(drive.cmd, -RUDDER_MAX, RUDDER_MAX);
     const step = RUDDER_RATE * dt;
     drive.rudder += Math.max(-step, Math.min(step, rTarget - drive.rudder));
 }

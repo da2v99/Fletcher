@@ -24,16 +24,21 @@ window.addEventListener('load', () => {
     scene.add(rain.lines);
 
     initEffects();
+    Tracers.init();
+    Islands.init();
     initShells();
     initTorpedoes();
     initPlayerWeapons();
+    AA.init();
     initCaptainInput();
     initThirdPersonAim();
     initCameraInput();
     initMenus();
     initKeys();
+    TouchUI.apply();
     applyWeather();
-    Clouds.update(renderer);
+    Gfx.apply();
+    Clouds.update(renderer, true);
 
     setCameraMode('cinematic');
     showScreen('mainMenu');
@@ -48,8 +53,7 @@ function initRenderer() {
     camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.5, 70000);
     camera.position.set(-85, 32, 85);
 
-    renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer = Gfx.createRenderer();
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -57,7 +61,7 @@ function initRenderer() {
 
     controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
-    controls.dampingFactor = 0.05;
+    controls.dampingFactor = 0.12;   // crisp, with just enough glide
     controls.maxPolarAngle = Math.PI / 2 - 0.02;
     controls.minDistance = 8;
     controls.maxDistance = 600;
@@ -76,12 +80,12 @@ function initRenderer() {
     fill.position.set(100, 20, -50);
     scene.add(ambLight, hemiLight, sunLight, sunLight.target, fill);
 
-    window.addEventListener('resize', () => {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
+    const onResize = () => {
+        Gfx.resize();
         if (overlay) resizeOverlay();
-    });
+    };
+    window.addEventListener('resize', onResize);
+    window.addEventListener('orientationchange', () => setTimeout(onResize, 250));
 }
 
 function initKeys() {
@@ -95,11 +99,25 @@ function initKeys() {
         if (!Game.running || Game.paused) return;
         if (k === 'a' || k === 'arrowleft') drive.left = true;
         if (k === 'd' || k === 'arrowright') drive.right = true;
-        if (k === ' ') { ensureAudio(); director.trigger = true; }
+        if (k === ' ') { ensureAudio(); if (AA.manned) AA.trigger = true; else director.trigger = true; }
         if (e.repeat) return;
-        if (k === 'w' || k === 'arrowup') drive.order = Math.min(ORDERS.length - 1, drive.order + 1);
-        if (k === 's' || k === 'arrowdown') drive.order = Math.max(0, drive.order - 1);
-        if (k === '0') drive.order = STOP_IDX;
+        if (k === 'g') { ensureAudio(); AA.toggleManned(); return; }
+        if (AA.manned) {
+            if (k === 'q') AA.cycle(-1);
+            if (k === 'e') AA.cycle(1);
+            if (k === 'z') AA.toggleZoom();
+            if (k === 'x') toggleLock(window.innerWidth / 2, window.innerHeight / 2);
+            if (k === 'b') { AA.leave(); setCaptain(true); }
+            if (k === 'c') AA.leave();
+            if (k === 'w' || k === 'arrowup') { ensureAudio(); setEngineOrder(drive.order + 1); }
+            if (k === 's' || k === 'arrowdown') { ensureAudio(); setEngineOrder(drive.order - 1); }
+            if (k === '0') setEngineOrder(STOP_IDX);
+            if (k === 't') fireTorpedoes();
+            return;
+        }
+        if (k === 'w' || k === 'arrowup') { ensureAudio(); setEngineOrder(drive.order + 1); }
+        if (k === 's' || k === 'arrowdown') { ensureAudio(); setEngineOrder(drive.order - 1); }
+        if (k === '0') setEngineOrder(STOP_IDX);
         if (k === 'x') {
             if (captain.active) toggleLock(window.innerWidth / 2, window.innerHeight / 2);
             else if (tpAim.onCanvas) toggleLock(tpAim.x, tpAim.y);
@@ -115,13 +133,30 @@ function initKeys() {
             if (k === 'e') captain.station = Math.min(2, captain.station + 1);
         }
     });
-    window.addEventListener('blur', () => { drive.left = drive.right = false; director.trigger = false; });
+    window.addEventListener('blur', () => { drive.left = drive.right = false; director.trigger = false; AA.trigger = false; });
     window.addEventListener('keyup', e => {
         const k = e.key.toLowerCase();
         if (k === 'a' || k === 'arrowleft') drive.left = false;
         if (k === 'd' || k === 'arrowright') drive.right = false;
-        if (k === ' ') director.trigger = false;
+        if (k === ' ') { director.trigger = false; AA.trigger = false; }
     });
+}
+
+// A few frames in, make sure the ocean and sky shaders compiled on this device; if not, step down a level
+let shaderChecks = 0;
+function checkShaders() {
+    if (shaderChecks > 3 || ++shaderChecks < 3) return;
+    shaderChecks = 99;
+    if (Gfx.failed(ocean.material)) {
+        const q = ocean.userData.quality;
+        if (q > 0) {
+            Settings.gfx.ocean = q - 1;
+            Settings.save();
+            rebuildOcean(q - 1);
+            shaderChecks = 0;   // check the simpler one too
+            console.warn('Ocean shader failed on this device; using quality', q - 1);
+        }
+    }
 }
 
 function animate() {
@@ -152,6 +187,8 @@ function animate() {
     if (dt > 0) {
         updatePlayerGuns(dt);
         updateTorpedoMounts(dt);
+        Air.update(dt, simTime);
+        AA.update(dt);
     }
     {
         const spin = drive.thrust * phys.engine / T_MAX * 0.5;
@@ -167,7 +204,10 @@ function animate() {
         p.needsUpdate = true;
     }
 
+    TouchUI.update(realDt);
     updateCamera(realDt, simTime);
+    Islands.update(dt, simTime);
+    Tracers.update(dt, simTime);
     updateOcean(ocean, simTime, phys.pos, phys.quat, phys.vel);
     sunLight.target.position.copy(phys.pos);
     sunLight.position.copy(phys.pos).addScaledVector(SUN_DIR, 200);
@@ -178,7 +218,8 @@ function animate() {
     Clouds.update(renderer);
     skyDome.position.copy(camera.position);
 
-    renderer.render(scene, camera);
+    Gfx.render(realDt * 1000, simTime);
+    checkShaders();
     drawOverlay();
     if (Game.mode !== 'menu') updateHud(realDt);
 }
