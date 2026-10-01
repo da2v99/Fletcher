@@ -70,6 +70,7 @@ function drawRadar(dt) {
         ctx.arc(c + Math.sin(p.rel) * r, c - Math.cos(p.rel) * r, 2 + p.size * 1.5, 0, Math.PI * 2);
         ctx.fill();
     });
+    Air.drawRadar(ctx, c, R, radar.range, hdg);
     // Own ship
     ctx.fillStyle = '#9fffb4';
     ctx.beginPath(); ctx.moveTo(c, c - 6); ctx.lineTo(c - 3, c + 4); ctx.lineTo(c + 3, c + 4); ctx.fill();

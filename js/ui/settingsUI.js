@@ -136,6 +136,8 @@ const CTL_ITEMS = [
     { section: 'Ship' },
     { label: 'AI gunners on the 40 mm / 20 mm', type: 'check', get: () => Settings.ctl.aaAuto, set: v => { Settings.ctl.aaAuto = v; },
       hint: 'They engage aircraft on their own while you are not on a gun.' },
+    { label: 'Air raids', type: 'select', options: [['off', 'Off'], ['occasional', 'Now and then'], ['frequent', 'Frequent']],
+      get: () => Settings.ctl.airRaids, set: v => { Settings.ctl.airRaids = v; if (typeof Air !== 'undefined' && v === 'frequent') Air.raidIn = Math.min(Air.raidIn, 45); } },
     { label: 'Engine-order telegraph bell', type: 'check', get: () => Settings.ctl.bell, set: v => { Settings.ctl.bell = v; } }
 ];
 

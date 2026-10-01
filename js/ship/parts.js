@@ -153,6 +153,7 @@ function createOerlikon() {
     addMesh(cradle, Box(0.55, 0.05, 0.05), MAT.gunMetal, 0, 0.05, -0.35);
     const shield = new THREE.CylinderGeometry(0.85, 0.85, 0.8, 12, 1, true, -0.6, 1.2);
     addMesh(g, shield, MAT.gray, 0, 1.05, -0.35);
+    g.userData.barrel = cradle;
     return g;
 }
 

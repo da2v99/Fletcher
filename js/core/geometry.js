@@ -173,3 +173,66 @@ function createMaterials() {
         wood: std(0x6b5a44, { roughness: 0.95 })
     };
 }
+
+// --- Vertex-coloured kit: primitives with a colour each, merged into one geometry (one draw call per model) ---
+const _kv = new THREE.Vector3(), _kv2 = new THREE.Vector3(), _kq = new THREE.Quaternion(), _ke = new THREE.Euler(), _ks = new THREE.Vector3(), _kUp = new THREE.Vector3(0, 1, 0);
+// Transform: position, then yaw (y), pitch (x), roll (z) in YXZ order, then scale
+function MX(x = 0, y = 0, z = 0, ry = 0, rx = 0, rz = 0, sx = 1, sy = sx, sz = sx) {
+    return new THREE.Matrix4().compose(_kv.set(x, y, z), _kq.setFromEuler(_ke.set(rx, ry, rz, 'YXZ')), _ks.set(sx, sy, sz));
+}
+function colorKit() {
+    const parts = [];
+    const api = {
+        // color: a hex, or [top, bottom] to paint by facing (upper surfaces / undersides, e.g. aircraft camouflage)
+        add(geo, color, m) {
+            parts.push({ geo, color: Array.isArray(color) ? color.map(c => new THREE.Color(c)) : new THREE.Color(color), m });
+            return api;
+        },
+        box(w, h, d, color, x, y, z, ry = 0, rx = 0, rz = 0) { return api.add(new THREE.BoxGeometry(w, h, d), color, MX(x, y, z, ry, rx, rz)); },
+        cyl(rt, rb, h, seg, color, x, y, z, ry = 0, rx = 0, rz = 0) { return api.add(new THREE.CylinderGeometry(rt, rb, h, seg), color, MX(x, y, z, ry, rx, rz)); },
+        strut(x0, y0, z0, x1, y1, z1, r, color, seg = 4) {
+            const d = _kv2.set(x1 - x0, y1 - y0, z1 - z0), len = d.length();
+            const m = new THREE.Matrix4().compose(_kv.set((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2),
+                _kq.setFromUnitVectors(_kUp, d.normalize()), _ks.set(1, 1, 1));
+            return api.add(new THREE.CylinderGeometry(r, r, len, seg), color, m);
+        },
+        // shade: optional [bottom, top] brightness gradient over the model's height (foliage)
+        build(shade = null) {
+            let n = 0;
+            const geos = parts.map(p => {
+                const g = p.geo.index ? p.geo.toNonIndexed() : p.geo;
+                if (g !== p.geo) p.geo.dispose();
+                if (!g.attributes.normal) g.computeVertexNormals();
+                g.applyMatrix4(p.m);
+                n += g.attributes.position.count;
+                return g;
+            });
+            const pos = new Float32Array(n * 3), nor = new Float32Array(n * 3), col = new Float32Array(n * 3);
+            let k = 0, y0 = Infinity, y1 = -Infinity;
+            geos.forEach((g, i) => {
+                const c = parts[i].color, cnt = g.attributes.position.count;
+                pos.set(g.attributes.position.array, k * 3);
+                nor.set(g.attributes.normal.array, k * 3);
+                for (let v = 0; v < cnt; v++) {
+                    const cc = Array.isArray(c) ? (nor[(k + v) * 3 + 1] > -0.15 ? c[0] : c[1]) : c;
+                    col[(k + v) * 3] = cc.r; col[(k + v) * 3 + 1] = cc.g; col[(k + v) * 3 + 2] = cc.b;
+                    const y = pos[(k + v) * 3 + 1];
+                    if (y < y0) y0 = y; if (y > y1) y1 = y;
+                }
+                k += cnt;
+                g.dispose();
+            });
+            if (shade) for (let v = 0; v < n; v++) {
+                const f = lerp(shade[0], shade[1], (pos[v * 3 + 1] - y0) / Math.max(1e-3, y1 - y0));
+                col[v * 3] *= f; col[v * 3 + 1] *= f; col[v * 3 + 2] *= f;
+            }
+            const out = new THREE.BufferGeometry();
+            out.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+            out.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+            out.setAttribute('color', new THREE.BufferAttribute(col, 3));
+            out.computeBoundingSphere();
+            return out;
+        }
+    };
+    return api;
+}

@@ -29,6 +29,7 @@ window.addEventListener('load', () => {
     initShells();
     initTorpedoes();
     initPlayerWeapons();
+    AA.init();
     initCaptainInput();
     initThirdPersonAim();
     initCameraInput();
@@ -98,8 +99,22 @@ function initKeys() {
         if (!Game.running || Game.paused) return;
         if (k === 'a' || k === 'arrowleft') drive.left = true;
         if (k === 'd' || k === 'arrowright') drive.right = true;
-        if (k === ' ') { ensureAudio(); director.trigger = true; }
+        if (k === ' ') { ensureAudio(); if (AA.manned) AA.trigger = true; else director.trigger = true; }
         if (e.repeat) return;
+        if (k === 'g') { ensureAudio(); AA.toggleManned(); return; }
+        if (AA.manned) {
+            if (k === 'q') AA.cycle(-1);
+            if (k === 'e') AA.cycle(1);
+            if (k === 'z') AA.toggleZoom();
+            if (k === 'x') toggleLock(window.innerWidth / 2, window.innerHeight / 2);
+            if (k === 'b') { AA.leave(); setCaptain(true); }
+            if (k === 'c') AA.leave();
+            if (k === 'w' || k === 'arrowup') { ensureAudio(); setEngineOrder(drive.order + 1); }
+            if (k === 's' || k === 'arrowdown') { ensureAudio(); setEngineOrder(drive.order - 1); }
+            if (k === '0') setEngineOrder(STOP_IDX);
+            if (k === 't') fireTorpedoes();
+            return;
+        }
         if (k === 'w' || k === 'arrowup') { ensureAudio(); setEngineOrder(drive.order + 1); }
         if (k === 's' || k === 'arrowdown') { ensureAudio(); setEngineOrder(drive.order - 1); }
         if (k === '0') setEngineOrder(STOP_IDX);
@@ -118,12 +133,12 @@ function initKeys() {
             if (k === 'e') captain.station = Math.min(2, captain.station + 1);
         }
     });
-    window.addEventListener('blur', () => { drive.left = drive.right = false; director.trigger = false; });
+    window.addEventListener('blur', () => { drive.left = drive.right = false; director.trigger = false; AA.trigger = false; });
     window.addEventListener('keyup', e => {
         const k = e.key.toLowerCase();
         if (k === 'a' || k === 'arrowleft') drive.left = false;
         if (k === 'd' || k === 'arrowright') drive.right = false;
-        if (k === ' ') director.trigger = false;
+        if (k === ' ') { director.trigger = false; AA.trigger = false; }
     });
 }
 
@@ -172,6 +187,8 @@ function animate() {
     if (dt > 0) {
         updatePlayerGuns(dt);
         updateTorpedoMounts(dt);
+        Air.update(dt, simTime);
+        AA.update(dt);
     }
     {
         const spin = drive.thrust * phys.engine / T_MAX * 0.5;

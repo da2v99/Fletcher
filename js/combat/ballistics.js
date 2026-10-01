@@ -10,7 +10,7 @@ const shells = [];
 let shellGeo, playerShellMat, enemyShellMat;
 
 function buildBallisticTable() {
-    for (let el = -10; el <= 45.01; el += 0.25) {
+    for (let el = -10; el <= 85.01; el += el < 45 ? 0.25 : 0.5) {
         const a = el * DEG;
         let vx = SHELL_V0 * Math.cos(a), vy = SHELL_V0 * Math.sin(a), x = 0, y = 0, t = 0, next = TRAJ_DT;
         let range = null, tof = 0;
@@ -70,12 +70,14 @@ function initShells() {
     enemyShellMat = new THREE.MeshBasicMaterial({ color: 0xff7a5c, fog: false });
 }
 
-// owner: 'player' | 'enemy'; tint: splash colour
-function spawnShell(origin, dir, inheritVel, owner, tint) {
+// owner: 'player' | 'enemy'; tint: splash colour; opts.vt: proximity (VT) fuze against aircraft, opts.fuze:
+// time fuze backup (s), bursting in the air if it misses
+function spawnShell(origin, dir, inheritVel, owner, tint, opts = null) {
     const mesh = new THREE.Mesh(shellGeo, owner === 'player' ? playerShellMat : enemyShellMat);
     mesh.position.copy(origin);
     scene.add(mesh);
-    shells.push({ pos: origin.clone(), vel: dir.clone().multiplyScalar(SHELL_V0).add(inheritVel), mesh, age: 0, owner, tint, whistled: false });
+    shells.push({ pos: origin.clone(), vel: dir.clone().multiplyScalar(SHELL_V0).add(inheritVel), mesh, age: 0, owner, tint, whistled: false,
+        vt: !!(opts && opts.vt), fuze: opts && opts.fuze ? opts.fuze : 0 });
 }
 
 function clearShells() {
@@ -108,6 +110,10 @@ function updateShells(dt, t) {
                     onPlayerShellHit(_hp.clone());
                     done = true;
                 }
+            }
+            // VT fuze: bursts as it passes a plane, or on its time fuze
+            if (s.vt && !done) {
+                if (Air.proximity(s.pos, 18) || (s.fuze && s.age > s.fuze)) { Air.flak(s.pos.clone()); done = true; }
             }
             // The land: the ground itself, or a building standing on it
             if (!done && s.pos.y < 520) {

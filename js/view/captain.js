@@ -58,7 +58,9 @@ function drawOverlay() {
     const ctx = overlayCtx, w = overlay.width, h = overlay.height;
     ctx.clearRect(0, 0, w, h);
     if (!Game.running) return;
+    if (AA.manned) { AA.drawSight(ctx, w, h); drawLockBracket(ctx, w, h); return; }
     drawObjectiveMarker(ctx, w, h);
+    Air.drawMarkers(ctx, w, h);
     if (!captain.active) {
         drawLockBracket(ctx, w, h);
         drawThirdPersonCrosshair(ctx);

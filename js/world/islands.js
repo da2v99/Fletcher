@@ -173,61 +173,8 @@ const Islands = (() => {
         return M;
     }
 
-    // ------------------------------------------------------------------ geometry kit
-    // Coloured primitives merged into one vertex-coloured geometry: a whole building is one draw call
-    function MX(x = 0, y = 0, z = 0, ry = 0, rx = 0, rz = 0, sx = 1, sy = sx, sz = sx) {
-        return new THREE.Matrix4().compose(_v.set(x, y, z), _q.setFromEuler(_e.set(rx, ry, rz, 'YXZ')), _s.set(sx, sy, sz));
-    }
-    function kit() {
-        const parts = [];
-        const api = {
-            add(geo, color, m) { parts.push({ geo, color: new THREE.Color(color), m }); return api; },
-            box(w, h, d, color, x, y, z, ry = 0, rx = 0, rz = 0) { return api.add(new THREE.BoxGeometry(w, h, d), color, MX(x, y, z, ry, rx, rz)); },
-            cyl(rt, rb, h, seg, color, x, y, z, ry = 0, rx = 0, rz = 0) { return api.add(new THREE.CylinderGeometry(rt, rb, h, seg), color, MX(x, y, z, ry, rx, rz)); },
-            strut(x0, y0, z0, x1, y1, z1, r, color, seg = 4) {
-                const d = _v2.set(x1 - x0, y1 - y0, z1 - z0), len = d.length();
-                const m = new THREE.Matrix4().compose(_v.set((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2),
-                    _q.setFromUnitVectors(_up, d.normalize()), _s.set(1, 1, 1));
-                return api.add(new THREE.CylinderGeometry(r, r, len, seg), color, m);
-            },
-            build(shade = null) {
-                let n = 0;
-                const geos = parts.map(p => {
-                    const g = p.geo.index ? p.geo.toNonIndexed() : p.geo;
-                    if (g !== p.geo) p.geo.dispose();
-                    g.applyMatrix4(p.m);
-                    n += g.attributes.position.count;
-                    return g;
-                });
-                const pos = new Float32Array(n * 3), nor = new Float32Array(n * 3), col = new Float32Array(n * 3);
-                let k = 0, y0 = Infinity, y1 = -Infinity;
-                geos.forEach((g, i) => {
-                    const c = parts[i].color, cnt = g.attributes.position.count;
-                    pos.set(g.attributes.position.array, k * 3);
-                    nor.set(g.attributes.normal.array, k * 3);
-                    for (let v = 0; v < cnt; v++) {
-                        col[(k + v) * 3] = c.r; col[(k + v) * 3 + 1] = c.g; col[(k + v) * 3 + 2] = c.b;
-                        const y = pos[(k + v) * 3 + 1];
-                        if (y < y0) y0 = y; if (y > y1) y1 = y;
-                    }
-                    k += cnt;
-                    g.dispose();
-                });
-                // Optional sky-light gradient: darker underneath (foliage)
-                if (shade) for (let v = 0; v < n; v++) {
-                    const f = lerp(shade[0], shade[1], (pos[v * 3 + 1] - y0) / Math.max(1e-3, y1 - y0));
-                    col[v * 3] *= f; col[v * 3 + 1] *= f; col[v * 3 + 2] *= f;
-                }
-                const out = new THREE.BufferGeometry();
-                out.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-                out.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
-                out.setAttribute('color', new THREE.BufferAttribute(col, 3));
-                out.computeBoundingSphere();
-                return out;
-            }
-        };
-        return api;
-    }
+    // ------------------------------------------------------------------ geometry kit (colorKit / MX in geometry.js)
+    const kit = colorKit;
     const gable = (w, h, len) => { const g = prism([[-w / 2, 0], [w / 2, 0], [0, h]], -len / 2, len / 2); g.rotateX(-Math.PI / 2); return g; };
     const ico = (r, d = 0) => new THREE.IcosahedronGeometry(r, d);
 

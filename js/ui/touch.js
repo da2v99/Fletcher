@@ -377,6 +377,11 @@ const TouchUI = (() => {
             rudNeedle.style.left = (50 + drive.rudder / RUDDER_MAX * 46) + '%';
         }
         if (steer === 'wheel') wheelSvg.setAttribute('transform', `rotate(${st.wheelAngle} 100 100)`);
+        // Gyro aiming on an AA gun
+        if (Settings.ctl.aimGyro && typeof AA !== 'undefined' && AA.manned) {
+            const l = Gyro.look(dt);
+            AA.look(l.yaw, l.pitch);
+        }
         // Gyro look in the captain's view
         if (Settings.ctl.aimGyro && captain.active) {
             const l = Gyro.look(dt);

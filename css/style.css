@@ -326,3 +326,6 @@ body.touch #bannerTitle { font-size: 34px; }
     }
     @keyframes rotateHint { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }
 }
+
+/* Manning an AA gun: the gunsight replaces the key help */
+body.aaview #keys { display: none; }

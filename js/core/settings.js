@@ -49,6 +49,7 @@ const Settings = {
         btnScale: 1,
         lookSens: 1,
         aaAuto: true,           // AI gunners man the 40 mm and 20 mm when you are not on a gun
+        airRaids: 'occasional', // off | occasional | frequent
         bell: true              // engine-order telegraph bell
     },
     audio: { volume: 0.8 },

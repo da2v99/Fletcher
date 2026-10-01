@@ -18,7 +18,8 @@ const Game = {
         clearTorpedoes();
         Tracers.clear();
         Islands.reset();
-        if (typeof Air !== 'undefined') Air.reset();
+        Air.reset();
+        AA.reset();
         this.objective = null;
         smokeFx.clear();
         sprayFx.clear();
@@ -62,6 +63,7 @@ const Game = {
         this.mode = 'menu';
         this.resetWorld();
         if (captain.active) setCaptain(false);
+        AA.leave();
         document.body.classList.remove('playing');
         setCameraMode('cinematic');
         showScreen('mainMenu');
@@ -152,6 +154,7 @@ const Game = {
                 phys.flood = 0;
                 phys.engine = Math.min(1, phys.engine + 0.3);
                 guns.forEach(g => { g.disabled = false; });
+                AA.repairAll();
                 torpMounts.forEach(m => { m.left = 5; });
                 hudMessage('Repairs made, torpedoes reloaded. Next contact expected shortly.', 'good');
                 this.phase = 'transit';
@@ -207,6 +210,7 @@ const Game = {
     },
 
     onPlayerSinking() {
+        AA.leave();
         this.running = false;
         drive.order = STOP_IDX;
         if (captain.active) setCaptain(false);

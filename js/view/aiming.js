@@ -21,7 +21,7 @@ function lockPoint(e, out = _proj) { return out.set(e.x, e.lockY !== undefined ?
 // Everything the director can lock: enemy ships, and on the islands guns, AA, buildings and trucks
 function lockables() {
     const live = enemies.filter(e => !e.sinking);
-    return live.concat(Islands.targets());
+    return live.concat(Islands.targets(), Air.targets());
 }
 
 // The live target under screen point (sx, sy): a direct hit on its model, else the nearest one within a few px
@@ -104,9 +104,22 @@ function lockMarkerNear(sx, sy) {
 // Lay the director: locked ship (with lead for time of flight), locked sea point, else whatever is under (sx, sy)
 function updateDirector(sx, sy) {
     const lk = director.lock;
-    if (lk && (lk.sinking || !(lk.isStructure ? lk.alive : enemies.includes(lk)))) director.lock = null;
+    if (lk && (lk.sinking || !(lk.isStructure || lk.isAir ? lk.alive : enemies.includes(lk)))) director.lock = null;
     director.aimValid = false;
     const leadOn = tg => {
+        if (tg.isAir) {
+            // AA fire control: where the plane will be when a VT-fuzed shell gets there
+            let tof = 0;
+            for (let k = 0; k < 3; k++) {
+                const px = tg.pos.x + tg.vel.x * tof, py = tg.pos.y + tg.vel.y * tof, pz = tg.pos.z + tg.vel.z * tof;
+                const sol = firingSolution(Math.hypot(px - phys.pos.x, pz - phys.pos.z), py - phys.pos.y - GUN_H);
+                if (sol) tof = sol.tof;
+                director.aim.set(px - phys.vel.x * tof, py, pz - phys.vel.z * tof);
+            }
+            director.aimValid = true;
+            director.aimTof = tof;
+            return;
+        }
         // Mk 1A fire control computer: lead the target (and allow for our own motion) by the time of flight
         const sol = firingSolution(Math.hypot(tg.x - phys.pos.x, tg.z - phys.pos.z));
         const tof = sol ? sol.tof : 0;

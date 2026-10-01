@@ -354,6 +354,14 @@ const FX = {
                 life: rnd(4, 8), s0: 2 * size, s1: rnd(6, 11) * size, r: 0.09, g: 0.085, b: 0.08, a: 0.7, fade: 1.3, drag: 2.2, grav: -0.05 });
         }
     },
+    // Small-calibre round into the sea: a thin white spout
+    smallSplash(x, y, z, size = 1) {
+        for (let i = 0; i < 10 * size + 3; i++) {
+            const a = Math.random() * Math.PI * 2, sp = rnd(0.3, 1.6) * size;
+            sprayFx.emit({ x, y: y + 0.1, z, vx: Math.cos(a) * sp, vy: rnd(3, 9) * Math.sqrt(size), vz: Math.sin(a) * sp,
+                life: rnd(0.6, 1.3), s0: rnd(0.3, 0.6) * size, s1: rnd(0.9, 1.6) * size, r: 0.93, g: 0.96, b: 0.98, a: 0.8, fade: 1, drag: 0.4, grav: GRAVITY, floor: y - 0.2 });
+        }
+    },
     // Small-calibre hit on steel: a spray of sparks and a wisp of smoke
     spark(p, n = 10) {
         for (let i = 0; i < n; i++) {
