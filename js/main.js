@@ -33,7 +33,8 @@ window.addEventListener('load', () => {
     initMenus();
     initKeys();
     applyWeather();
-    Clouds.update(renderer);
+    Gfx.apply();
+    Clouds.update(renderer, true);
 
     setCameraMode('cinematic');
     showScreen('mainMenu');
@@ -48,8 +49,7 @@ function initRenderer() {
     camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.5, 70000);
     camera.position.set(-85, 32, 85);
 
-    renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer = Gfx.createRenderer();
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -76,12 +76,12 @@ function initRenderer() {
     fill.position.set(100, 20, -50);
     scene.add(ambLight, hemiLight, sunLight, sunLight.target, fill);
 
-    window.addEventListener('resize', () => {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
+    const onResize = () => {
+        Gfx.resize();
         if (overlay) resizeOverlay();
-    });
+    };
+    window.addEventListener('resize', onResize);
+    window.addEventListener('orientationchange', () => setTimeout(onResize, 250));
 }
 
 function initKeys() {
@@ -122,6 +122,23 @@ function initKeys() {
         if (k === 'd' || k === 'arrowright') drive.right = false;
         if (k === ' ') director.trigger = false;
     });
+}
+
+// A few frames in, make sure the ocean and sky shaders compiled on this device; if not, step down a level
+let shaderChecks = 0;
+function checkShaders() {
+    if (shaderChecks > 3 || ++shaderChecks < 3) return;
+    shaderChecks = 99;
+    if (Gfx.failed(ocean.material)) {
+        const q = ocean.userData.quality;
+        if (q > 0) {
+            Settings.gfx.ocean = q - 1;
+            Settings.save();
+            rebuildOcean(q - 1);
+            shaderChecks = 0;   // check the simpler one too
+            console.warn('Ocean shader failed on this device; using quality', q - 1);
+        }
+    }
 }
 
 function animate() {
@@ -178,7 +195,8 @@ function animate() {
     Clouds.update(renderer);
     skyDome.position.copy(camera.position);
 
-    renderer.render(scene, camera);
+    Gfx.render(realDt * 1000, simTime);
+    checkShaders();
     drawOverlay();
     if (Game.mode !== 'menu') updateHud(realDt);
 }

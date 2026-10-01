@@ -2,7 +2,13 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#0b1520">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Fletcher">
+    <link rel="manifest" href="manifest.json">
     <title>Fletcher: Destroyer Command</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -13,6 +19,7 @@
 </head>
 <body>
     <div id="loading">Raising steam…</div>
+    <div id="gfxReset"><div>The graphics driver was reset.<br><small>Graphics lowered one level. Reloading…</small></div></div>
     <div id="canvas-container"></div>
     <canvas id="overlay"></canvas>
 
@@ -123,6 +130,7 @@
     <!-- Core -->
     <script src="js/core/config.js"></script>
     <script src="js/core/math.js"></script>
+    <script src="js/core/settings.js"></script>
     <script src="js/core/geometry.js"></script>
     <!-- Ship model -->
     <script src="js/ship/hullLines.js"></script>
@@ -139,6 +147,7 @@
     <script src="js/physics/shipPhysics.js"></script>
     <script src="js/fx/particles.js"></script>
     <script src="js/fx/audio.js"></script>
+    <script src="js/fx/post.js"></script>
     <script src="js/combat/ballistics.js"></script>
     <script src="js/combat/torpedoes.js"></script>
     <script src="js/combat/enemyModels.js"></script>

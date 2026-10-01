@@ -1,14 +1,24 @@
 // Volumetric sky: the raymarched "protean" clouds from Waves and Clouds/clouds.js, lit by our sun and
-// thickened by the storm. They are rendered into a cube map one face per frame (a full refresh every six
-// frames), which the sky dome displays and the ocean samples for its reflections, so both always match.
+// thickened by the storm. They are rendered into a cube map one face at a time, which the sky dome displays
+// and the ocean samples for its reflections, so both always match.
+// Quality (Settings.gfx.clouds): 0 a painted cloud layer, 1-3 raymarched with more steps and resolution.
+// Lighter levels also refresh the cube more slowly and never render all six faces in one frame, which is
+// what trips phone GPU watchdogs.
+const CLOUD_Q = [
+    { size: 128, steps: 0, every: 8 },
+    { size: 160, steps: 40, every: 2 },
+    { size: 256, steps: 72, every: 1 },
+    { size: 320, steps: 110, every: 1 }
+];
 
 const Clouds = (() => {
-    const SIZE = 320;
-    let rt, cubeCam, skyScene, face = 0, dirty = true;
+    let q = Settings.gfx.clouds, SIZE = CLOUD_Q[q].size;
+    let rt, cubeCam, skyScene, skyMesh, face = 0, dirtyFaces = 6, frame = 0;
 
     const cloudU = Object.assign({}, WEATHER_U, { uFlash: { value: 0 }, uCover: { value: 0.6 } });   // flashes are added live, not baked
 
-    const fragment = NOISE_GLSL + SKY_GLSL + `
+    const fragment = () => `#define STEPS ${CLOUD_Q[q].steps}
+` + NOISE_GLSL + SKY_GLSL + `
         varying vec3 vDir;
         uniform float uCover;
         #define PHI 1.61803398875
@@ -39,6 +49,19 @@ const Clouds = (() => {
             vec3 rd = normalize(vDir);
             vec3 sky = skyColor(rd);
             if (rd.y < -0.02) { gl_FragColor = vec4(sky, 0.0); return; }
+#if STEPS == 0
+            // Painted cloud layer: fbm on a plane overhead, thicker with the storm
+            vec2 uv = rd.xz / max(rd.y, 0.04) * 1.6 + vec2(uTime * 0.01, uTime * 0.004);
+            float n = fbm3(uv) * 0.65 + fbm3(uv * 2.7 + 3.1) * 0.35;
+            float cov = smoothstep(0.62 - uCover * 0.22, 0.95 - uCover * 0.2, n) * smoothstep(0.0, 0.12, rd.y);
+            float dawn0 = 1.0 - smoothstep(0.05, 0.45, uSunDir.y);
+            float bright0 = mix(0.45, 1.0, smoothstep(-0.1, 0.3, uSunDir.y));
+            vec3 cc = mix(vec3(1.0, 0.98, 0.95), uSunCol * vec3(1.0, 0.86, 0.8), dawn0 * 0.7) * bright0 * (1.0 - 0.45 * uStorm);
+            cc = mix(cc, mix(vec3(0.24, 0.29, 0.38), vec3(0.10, 0.11, 0.13), uStorm) * bright0, smoothstep(0.7, 1.0, n));
+            float haze0 = (1.0 - smoothstep(0.0, 0.3, rd.y)) * 0.65;
+            cc = mix(cc, sky, haze0);
+            gl_FragColor = vec4(mix(sky, cc, cov * 0.9), cov);
+#else
 
             float dawn = 1.0 - smoothstep(0.05, 0.45, uSunDir.y);
             float bright = mix(0.45, 1.0, smoothstep(-0.1, 0.3, uSunDir.y));
@@ -51,7 +74,8 @@ const Clouds = (() => {
             vec3 ro = vec3(0.0, -1.0, 0.0);
             vec4 rez = vec4(0.0);
             float t = 1.0 + hash12(gl_FragCoord.xy) * 0.5;
-            for (int i = 0; i < 110; i++) {
+            float stride = 110.0 / float(STEPS);
+            for (int i = 0; i < STEPS; i++) {
                 if (rez.a > 0.99 || t > 70.0) break;
                 vec3 pos = ro + t * rd;
                 float m = cloudMap(pos);
@@ -59,18 +83,29 @@ const Clouds = (() => {
                     float den = smoothstep(0.0, 1.0, m);
                     float dif = clamp((den - cloudMap(pos + sunL * 0.4)) / 0.8, 0.0, 1.0);
                     vec3 c = mix(shadowCol, litCol, clamp(dif * 1.5 + 0.1, 0.0, 1.0));
-                    vec4 col = vec4(c, 0.08 * den * smoothstep(70.0, 35.0, t));
+                    vec4 col = vec4(c, min(1.0, 0.08 * stride) * den * smoothstep(70.0, 35.0, t));
                     col.rgb *= col.a;
                     rez += col * (1.0 - rez.a);
                 }
-                t += 0.05 + t * 0.025;
+                t += (0.05 + t * 0.025) * stride;
             }
             // Aerial perspective: low clouds dissolve into the horizon haze
             float haze = (1.0 - smoothstep(0.0, 0.3, rd.y)) * 0.65;
             rez.rgb = mix(rez.rgb, sky * rez.a, haze);
             gl_FragColor = vec4(sky * (1.0 - rez.a) + rez.rgb, rez.a);
+#endif
         }
     `;
+
+    const makeMaterial = () => new THREE.ShaderMaterial({
+        uniforms: cloudU,
+        vertexShader: `
+            varying vec3 vDir;
+            void main() { vDir = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
+        `,
+        fragmentShader: fragment(),
+        side: THREE.BackSide, depthWrite: false, depthTest: false
+    });
 
     function init() {
         rt = new THREE.WebGLCubeRenderTarget(SIZE, {
@@ -80,39 +115,51 @@ const Clouds = (() => {
         skyScene = new THREE.Scene();
         cubeCam = new THREE.CubeCamera(1, 100, rt);
         skyScene.add(cubeCam);
-        const mat = new THREE.ShaderMaterial({
-            uniforms: cloudU,
-            vertexShader: `
-                varying vec3 vDir;
-                void main() { vDir = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
-            `,
-            fragmentShader: fragment,
-            side: THREE.BackSide, depthWrite: false, depthTest: false
-        });
-        skyScene.add(new THREE.Mesh(new THREE.SphereGeometry(50, 48, 24), mat));
+        skyMesh = new THREE.Mesh(new THREE.SphereGeometry(50, 48, 24), makeMaterial());
+        skyScene.add(skyMesh);
         cubeCam.updateMatrixWorld(true);
         return rt.texture;
     }
 
-    // Render one cube face (or all six after the weather changes)
-    function update(renderer) {
+    // Change quality: new shader and cube resolution (the texture object is kept, so materials sampling
+    // it don't need rebuilding)
+    function setQuality(nq) {
+        if (nq === q || !rt) return;
+        q = nq;
+        skyMesh.material.dispose();
+        skyMesh.material = makeMaterial();
+        if (CLOUD_Q[q].size !== SIZE) {
+            SIZE = CLOUD_Q[q].size;
+            rt.setSize(SIZE, SIZE);
+        }
+        dirtyFaces = 6;
+    }
+
+    // Render cube faces round-robin: a few per frame after the weather changes, then one every few frames
+    function update(renderer, force) {
+        frame++;
+        const cfg = CLOUD_Q[q];
+        let n = 0;
+        if (force) n = 6;
+        else if (dirtyFaces > 0) n = q >= 2 ? Math.min(dirtyFaces, 3) : 1;
+        else if (frame % cfg.every === 0) n = 1;
+        if (!n) return;
         const cams = cubeCam.children;
         const prev = renderer.getRenderTarget();
-        const faces = dirty ? [0, 1, 2, 3, 4, 5] : [face];
-        faces.forEach(f => {
-            rt.texture.generateMipmaps = f === 5;
-            renderer.setRenderTarget(rt, f);
-            renderer.render(skyScene, cams[f]);
-        });
+        for (let i = 0; i < n; i++) {
+            rt.texture.generateMipmaps = face === 5;
+            renderer.setRenderTarget(rt, face);
+            renderer.render(skyScene, cams[face]);
+            face = (face + 1) % 6;
+            if (dirtyFaces > 0) dirtyFaces--;
+        }
         rt.texture.generateMipmaps = true;
         renderer.setRenderTarget(prev);
-        face = (face + 1) % 6;
-        dirty = false;
     }
 
     function invalidate() {
         cloudU.uCover.value = lerp(0.1, 1.9, weather.storm);   // fair-weather cumulus -> solid storm deck
-        dirty = true;
+        dirtyFaces = 6;
     }
 
     // The visible sky: the cube map, plus the sun disc (hidden by cloud) and live lightning flashes
@@ -147,5 +194,5 @@ const Clouds = (() => {
         return dome;
     }
 
-    return { init, update, invalidate, createSkyDome, uniforms: cloudU, get texture() { return rt.texture; } };
+    return { init, update, invalidate, setQuality, createSkyDome, uniforms: cloudU, get texture() { return rt.texture; } };
 })();

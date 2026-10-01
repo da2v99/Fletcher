@@ -23,6 +23,10 @@ body.playing:not(.captain) #canvas-container canvas { cursor: none; }   /* the g
     font: 600 28px 'Oswald', sans-serif; letter-spacing: 3px; transition: opacity 0.6s;
 }
 #loading.hidden { opacity: 0; pointer-events: none; }
+#gfxReset { position: absolute; inset: 0; display: none; place-items: center; background: rgba(5, 10, 16, 0.85); z-index: 60; text-align: center; font: 600 20px 'Oswald', sans-serif; letter-spacing: 1px; }
+#gfxReset.show { display: grid; }
+#gfxReset small { font: 400 14px 'Inter', sans-serif; color: var(--muted); }
+#fpsMeter { position: absolute; left: 50%; bottom: 4px; transform: translateX(-50%); z-index: 30; font: 11px Consolas, monospace; color: #9fffb4; background: rgba(0, 0, 0, 0.45); padding: 2px 8px; border-radius: 4px; pointer-events: none; }
 
 .panel {
     background: var(--panel); border: 1px solid var(--edge); border-radius: 10px;

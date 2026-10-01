@@ -89,7 +89,16 @@ function createParticleSystem(maxCount, blending, texture = 'soft') {
     const list = [];
     return {
         points,
-        emit(p) { if (list.length < maxCount) list.push(Object.assign({ age: -(p.delay || 0) }, p)); },
+        // Lighter graphics presets keep a share of the particles (bigger ones, so effects keep their mass)
+        emit(p) {
+            const keep = Gfx.particleKeep;
+            if (keep < 1) {
+                if (Math.random() > keep) return;
+                const k = 1 / Math.sqrt(keep);
+                p.s0 *= k; p.s1 *= k;
+            }
+            if (list.length < maxCount) list.push(Object.assign({ age: -(p.delay || 0) }, p));
+        },
         clear() { list.length = 0; },
         update(dt, scaleValue) {
             mat.uniforms.scale.value = scaleValue;
@@ -118,7 +127,13 @@ function createParticleSystem(maxCount, blending, texture = 'soft') {
                 n++;
             }
             geo.setDrawRange(0, n);
-            ['position', 'pcolor', 'psize', 'palpha'].forEach(k => { geo.attributes[k].needsUpdate = true; });
+            // Upload only the live part of each buffer
+            if (n > 0) {
+                const A = geo.attributes;
+                A.position.updateRange.count = n * 3; A.pcolor.updateRange.count = n * 3;
+                A.psize.updateRange.count = n; A.palpha.updateRange.count = n;
+                A.position.needsUpdate = A.pcolor.needsUpdate = A.psize.needsUpdate = A.palpha.needsUpdate = true;
+            }
         }
     };
 }

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#0b1520"/>
+  <path d="M60 300 L452 300 L420 352 L104 352 Z" fill="#868e97"/>
+  <rect x="150" y="250" width="200" height="50" fill="#868e97"/>
+  <rect x="210" y="200" width="60" height="50" fill="#868e97"/>
+  <rect x="300" y="215" width="26" height="40" fill="#5a636c"/>
+  <rect x="190" y="222" width="22" height="30" fill="#5a636c"/>
+  <path d="M60 368 Q256 400 452 368" stroke="#3f86d8" stroke-width="14" fill="none"/>
+  <text x="256" y="150" text-anchor="middle" font-family="Oswald, Arial, sans-serif" font-size="78" font-weight="700" fill="#ffd27a" letter-spacing="6">DD-445</text>
+</svg>
