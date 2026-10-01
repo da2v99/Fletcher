@@ -16,11 +16,17 @@ function resetDirector() {
     director.trigger = false;
 }
 
-function lockPoint(e, out = _proj) { return out.set(e.x, e.obj.position.y + 4, e.z); }
+function lockPoint(e, out = _proj) { return out.set(e.x, e.lockY !== undefined ? e.lockY : e.obj.position.y + 4, e.z); }
 
-// The live enemy under screen point (sx, sy): a direct hit on its hull, else the nearest one within a few px
-function enemyAtScreen(sx, sy) {
+// Everything the director can lock: enemy ships, and on the islands guns, AA, buildings and trucks
+function lockables() {
     const live = enemies.filter(e => !e.sinking);
+    return live.concat(Islands.targets());
+}
+
+// The live target under screen point (sx, sy): a direct hit on its model, else the nearest one within a few px
+function enemyAtScreen(sx, sy) {
+    const live = lockables();
     if (!live.length) return null;
     _ndc.set(sx / window.innerWidth * 2 - 1, -sy / window.innerHeight * 2 + 1);
     _aimRay.setFromCamera(_ndc, camera);
@@ -42,12 +48,19 @@ function enemyAtScreen(sx, sy) {
     return best;
 }
 
-// Where the crosshair ray meets the sea (y = 0), or max range along its bearing when it points above the horizon
+// Where the crosshair ray meets the land or the sea (y = 0), or max range along its bearing when it points
+// above the horizon
 function crosshairSeaPoint(sx, sy, out) {
     _ndc.set(sx / window.innerWidth * 2 - 1, -sy / window.innerHeight * 2 + 1);
     _aimRay.setFromCamera(_ndc, camera);
     const o = _aimRay.ray.origin, d = _aimRay.ray.direction;
     const maxR = MAX_RANGE * 0.995;
+    const tSea = d.y < -0.0002 ? -o.y / d.y : Infinity;
+    const tLand = Islands.raycast(o, d, Math.min(tSea, 30000));
+    if (tLand !== null) {
+        out.copy(o).addScaledVector(d, tLand);
+        if (Math.hypot(out.x - phys.pos.x, out.z - phys.pos.z) <= maxR) return out;
+    }
     if (d.y < -0.0002) {
         out.copy(o).addScaledVector(d, -o.y / d.y).setY(0);
         const dx = out.x - phys.pos.x, dz = out.z - phys.pos.z, r = Math.hypot(dx, dz);
@@ -79,7 +92,7 @@ function toggleLock(sx, sy) {
         const pt = crosshairSeaPoint(sx, sy, new THREE.Vector3());
         director.lock = null;
         director.lockPoint = pt;
-        hudMessage(`Director locked on the sea, bearing ${fmt3(compassDeg(pt.x - phys.pos.x, pt.z - phys.pos.z))}, ${yds(pt.x, pt.z)} yds`, 'info');
+        hudMessage(`Director locked on ${pt.y > 0.5 ? 'the shore' : 'the sea'}, bearing ${fmt3(compassDeg(pt.x - phys.pos.x, pt.z - phys.pos.z))}, ${yds(pt.x, pt.z)} yds`, 'info');
     }
 }
 
@@ -90,14 +103,15 @@ function lockMarkerNear(sx, sy) {
 
 // Lay the director: locked ship (with lead for time of flight), locked sea point, else whatever is under (sx, sy)
 function updateDirector(sx, sy) {
-    if (director.lock && (director.lock.sinking || !enemies.includes(director.lock))) director.lock = null;
+    const lk = director.lock;
+    if (lk && (lk.sinking || !(lk.isStructure ? lk.alive : enemies.includes(lk)))) director.lock = null;
     director.aimValid = false;
     const leadOn = tg => {
         // Mk 1A fire control computer: lead the target (and allow for our own motion) by the time of flight
         const sol = firingSolution(Math.hypot(tg.x - phys.pos.x, tg.z - phys.pos.z));
         const tof = sol ? sol.tof : 0;
         const v = enemyVelocity(tg);
-        director.aim.set(tg.x + (v.x - phys.vel.x) * tof, 0, tg.z + (v.z - phys.vel.z) * tof);
+        director.aim.set(tg.x + (v.x - phys.vel.x) * tof, tg.aimY || 0, tg.z + (v.z - phys.vel.z) * tof);
         director.aimValid = true;
     };
     if (director.lock) leadOn(director.lock);
@@ -178,7 +192,7 @@ function drawThirdPersonCrosshair(ctx) {
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
     const lines = [];
     if (director.aimValid) {
-        const sol = firingSolution(director.aimRange);
+        const sol = firingSolution(director.aimRange, director.aim.y - GUN_H);
         lines.push(`${Math.round(director.aimRange * 1.0936).toLocaleString()} yds${sol ? '' : ' · OUT OF RANGE'}`);
     }
     if (director.lock) lines.push(`LOCKED ${director.lock.type.name.toUpperCase()}`);
@@ -190,4 +204,39 @@ function drawThirdPersonCrosshair(ctx) {
         ctx.fillStyle = t.startsWith('LOCKED') ? 'rgba(255,120,100,0.95)' : col;
         ctx.fillText(t, x + 18, y + 18 + i * 13);
     });
+}
+
+// Shore bombardment: a marker over the battery, or an arrow at the edge of the view pointing toward it
+function drawObjectiveMarker(ctx, w, h) {
+    const b = Game.objective;
+    if (!b || !b.isl.ready || b.guns.every(g => !g.alive)) return;
+    const gun = b.guns.find(g => g.alive);
+    const v = _proj.set(gun.x, gun.y + 25, gun.z).project(camera);
+    const yd = Math.round(Math.hypot(gun.x - phys.pos.x, gun.z - phys.pos.z) * 1.0936).toLocaleString();
+    let sx = (v.x * 0.5 + 0.5) * w, sy = (-v.y * 0.5 + 0.5) * h;
+    const behind = v.z > 1;
+    ctx.save();
+    ctx.strokeStyle = ctx.fillStyle = 'rgba(255,205,90,0.95)';
+    ctx.lineWidth = 2;
+    ctx.font = '11px Consolas, monospace';
+    ctx.textAlign = 'center';
+    if (!behind && sx > 40 && sx < w - 40 && sy > 70 && sy < h - 70) {
+        ctx.beginPath();
+        ctx.moveTo(sx, sy - 9); ctx.lineTo(sx + 7, sy); ctx.lineTo(sx, sy + 9); ctx.lineTo(sx - 7, sy); ctx.closePath();
+        ctx.stroke();
+        ctx.fillText(`BATTERY · ${yd} yds`, sx, sy - 15);
+    } else {
+        let dx = sx - w / 2, dy = sy - h / 2;
+        if (behind) { dx = -dx; dy = -dy; }
+        const k = Math.min((w / 2 - 44) / Math.max(Math.abs(dx), 1e-3), (h / 2 - 80) / Math.max(Math.abs(dy), 1e-3));
+        const ex = w / 2 + dx * k, ey = h / 2 + dy * k, a = Math.atan2(dy, dx);
+        ctx.beginPath();
+        ctx.moveTo(ex + Math.cos(a) * 12, ey + Math.sin(a) * 12);
+        ctx.lineTo(ex + Math.cos(a + 2.5) * 10, ey + Math.sin(a + 2.5) * 10);
+        ctx.lineTo(ex + Math.cos(a - 2.5) * 10, ey + Math.sin(a - 2.5) * 10);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillText(`BATTERY ${yd} yds`, ex - Math.cos(a) * 20, ey - Math.sin(a) * 20 + 4);
+    }
+    ctx.restore();
 }

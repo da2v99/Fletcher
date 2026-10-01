@@ -8,13 +8,18 @@ const Game = {
     hostile: false,        // do enemies shoot back?
     over: false,
     wave: 0, score: 0,
-    stats: { rounds: 0, torps: 0, hits: 0, hitsTaken: 0, sunk: 0 },
+    stats: { rounds: 0, torps: 0, hits: 0, hitsTaken: 0, sunk: 0, shore: 0, troops: 0, planes: 0 },
     phase: 'idle', phaseT: 0,
+    objective: null,       // shore bombardment: the base whose battery must be silenced
 
     resetWorld() {
         clearEnemies();
         clearShells();
         clearTorpedoes();
+        Tracers.clear();
+        Islands.reset();
+        if (typeof Air !== 'undefined') Air.reset();
+        this.objective = null;
         smokeFx.clear();
         sprayFx.clear();
         fireFx.clear();
@@ -25,7 +30,7 @@ const Game = {
         resetWake();
         this.wave = 0;
         this.score = 0;
-        this.stats = { rounds: 0, torps: 0, hits: 0, hitsTaken: 0, sunk: 0 };
+        this.stats = { rounds: 0, torps: 0, hits: 0, hitsTaken: 0, sunk: 0, shore: 0, troops: 0, planes: 0 };
         this.over = false;
         this.paused = false;
     },
@@ -75,8 +80,27 @@ const Game = {
         spawnEnemy('maru', phys.pos.x + Math.sin(a) * dist, phys.pos.z + Math.cos(a) * dist, Math.random() * Math.PI * 2);
     },
 
+    // Every third engagement is a shore bombardment, if there's a garrison within reach: silence its battery
+    spawnBombardment(n) {
+        const base = Islands.bases.filter(b => !b.destroyed && b.guns.some(g => g.alive))
+            .map(b => ({ b, d: Math.hypot(b.x - phys.pos.x, b.z - phys.pos.z) })).filter(o => o.d < 20000).sort((a, c) => a.d - c.d)[0];
+        if (!base) return false;
+        const b = base.b;
+        this.objective = b;
+        b.alert = true;
+        // A destroyer guards the approaches to the island
+        const gx = b.x + b.fx * 3500, gz = b.z + b.fz * 3500;
+        spawnEnemy('destroyer', gx, gz, Math.atan2(phys.pos.x - gx, phys.pos.z - gz));
+        hudMessage(`ENGAGEMENT ${n}: shore bombardment — silence the coastal battery on ${b.name}, bearing ${fmt3(compassDeg(b.x - phys.pos.x, b.z - phys.pos.z))}, ${Math.round(base.d * 1.0936).toLocaleString()} yds. A destroyer guards the approach.`, 'alert');
+        playAlarm();
+        showBanner(`Engagement ${n}`, `Shore bombardment · ${b.name}`);
+        return true;
+    },
+
     // Each engagement: a convoy crossing ahead of us, screened by warships that come out to fight
     spawnWave(n) {
+        if (n % 3 === 0 && this.spawnBombardment(n)) return;
+        n -= Math.floor(n / 3);   // convoys keep growing at the same pace with bombardments in between
         const comp = n === 1 ? ['destroyer', 'maru', 'maru']
             : n === 2 ? ['destroyer', 'destroyer', 'maru', 'maru']
             : n === 3 ? ['cruiser', 'destroyer', 'maru', 'maru', 'maru']
@@ -100,9 +124,9 @@ const Game = {
             }
         });
         const warships = comp.filter(t => t !== 'maru').length;
-        hudMessage(`ENGAGEMENT ${n}: convoy bearing ${fmt3(compassDeg(Math.sin(brg), Math.cos(brg)))}, ${Math.round(dist * 1.0936 / 1000)}k yds — ${warships} warship${warships > 1 ? 's' : ''} in the screen. General quarters!`, 'alert');
+        hudMessage(`ENGAGEMENT ${this.wave}: convoy bearing ${fmt3(compassDeg(Math.sin(brg), Math.cos(brg)))}, ${Math.round(dist * 1.0936 / 1000)}k yds — ${warships} warship${warships > 1 ? 's' : ''} in the screen. General quarters!`, 'alert');
         playAlarm();
-        showBanner(`Engagement ${n}`, `${comp.filter(t => t === 'maru').length} transports · ${warships} escort${warships > 1 ? 's' : ''}`);
+        showBanner(`Engagement ${this.wave}`, `${comp.filter(t => t === 'maru').length} transports · ${warships} escort${warships > 1 ? 's' : ''}`);
     },
 
     update(dt) {
@@ -113,8 +137,9 @@ const Game = {
                 this.wave++;
                 this.spawnWave(this.wave);
                 this.phase = 'battle';
-            } else if (this.phase === 'battle' && !playerDmg.sinking && enemies.every(e => e.sinking)) {
+            } else if (this.phase === 'battle' && !playerDmg.sinking && this.engagementWon()) {
                 this.phase = 'cleared';
+                this.objective = null;
                 this.phaseT = 10;
                 const bonus = 250 * this.wave;
                 this.score += bonus;
@@ -132,10 +157,41 @@ const Game = {
                 this.phase = 'transit';
                 this.phaseT = 25;
             }
-        } else if (this.mode === 'cruise' && enemies.filter(e => !e.sinking).length < 4) {
+        } else if (this.mode === 'cruise' && enemies.filter(e => !e.sinking && !e.island).length < 4) {
             this.spawnTransport(rnd(5000, 10000), rnd(-1.4, 1.4));
         }
         if (playerDmg.sinking && !this.over && playerDmg.sinkT > 9) this.gameOver();
+    },
+
+    engagementWon() {
+        const ships = enemies.every(e => e.sinking || e.island);
+        const b = this.objective;
+        if (!b) return ships;
+        if (!b.isl.ready) return true;   // sailed away from it: the engagement is called off
+        return ships && b.guns.every(g => !g.alive);
+    },
+
+    // Something ashore destroyed (st = null: troops)
+    onShoreTarget(st, score, kills = 0) {
+        this.score += score;
+        if (st) {
+            this.stats.shore++;
+            hudMessage(`${st.type.name} on ${st.base.name} destroyed! +${score}`, 'good');
+            if (st.kind === 'gun' && this.objective === st.base && st.base.guns.every(g => !g.alive)) {
+                hudMessage(`The battery on ${st.base.name} is silenced!`, 'good');
+                showBanner('Battery silenced', st.base.name);
+            }
+        } else if (kills) {
+            this.stats.troops += kills;
+            if (kills >= 3) hudMessage(`Direct hit on troops ashore +${score}`, 'good');
+        }
+    },
+
+    onBaseDestroyed(b) {
+        const bonus = 500;
+        this.score += bonus;
+        hudMessage(`The base on ${b.name} is wrecked! +${bonus}`, 'good');
+        showBanner('Base destroyed', `${b.name} · +${bonus}`);
     },
 
     onHit(e) {
@@ -166,6 +222,8 @@ const Game = {
             <div><span>Rounds fired</span><b>${this.stats.rounds}</b></div>
             <div><span>Hits scored</span><b>${this.stats.hits}</b></div>
             <div><span>Torpedoes fired</span><b>${this.stats.torps}</b></div>
+            <div><span>Shore targets destroyed</span><b>${this.stats.shore}</b></div>
+            <div><span>Aircraft shot down</span><b>${this.stats.planes}</b></div>
             <div><span>Hits taken</span><b>${this.stats.hitsTaken}</b></div>
             <div class="total"><span>Final score</span><b>${this.score.toLocaleString()}</b></div>`;
         showScreen('gameOver');

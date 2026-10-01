@@ -24,7 +24,7 @@ function resetPlayerWeapons() {
     torpMounts.forEach(m => { Object.assign(m, { left: 5, train: 0, disabled: false, pending: null }); m.obj.rotation.y = 0; });
 }
 
-const _mp = new THREE.Vector3(), _qi = new THREE.Quaternion();
+const _mp = new THREE.Vector3(), _qi = new THREE.Quaternion(), _pv = new THREE.Vector3();
 function updatePlayerGuns(dt) {
     const aim = Game.running && director.aimValid ? director.aim : null;
     _qi.copy(phys.quat).invert();
@@ -35,8 +35,9 @@ function updatePlayerGuns(dt) {
         g.status = g.disabled ? 'damaged' : 'stowed';
         if (aim && !g.disabled) {
             g.mount.getWorldPosition(_mp);
+            g.pivot.getWorldPosition(_pv);
             const dx = aim.x - _mp.x, dz = aim.z - _mp.z, R = Math.hypot(dx, dz);
-            const sol = firingSolution(R);
+            const sol = firingSolution(R, aim.y - _pv.y);   // the target's height above the trunnions (shore targets)
             const el = sol ? sol.el : 40 * DEG;
             // World firing direction -> ship frame: the director compensates for roll and pitch
             const ld = new THREE.Vector3(dx / R * Math.cos(el), Math.sin(el), dz / R * Math.cos(el)).applyQuaternion(_qi);

@@ -291,6 +291,79 @@ const FX = {
         if (Math.random() < 0.6 * intensity) fireFx.emit({ x: p.x + randn() * 1.5, y: p.y, z: p.z + randn() * 1.5, vx: randn(), vy: rnd(2, 6), vz: randn(),
             life: rnd(0.3, 0.7), s0: rnd(2.5, 4.5), s1: rnd(4, 7), r: 1.0, g: 0.5, b: 0.15, a: 0.9, drag: 1, grav: -1 });
     },
+    // Shell burst on land: a flash and short fireball, a fountain of earth and stones, and a brown-grey dust
+    // cloud that billows up and drifts downwind. scale 1 = 5" HE; small values for 40 mm.
+    dirt(p, scale = 1) {
+        const k = Math.sqrt(scale);
+        fireFx.emit({ x: p.x, y: p.y + 1, z: p.z, vx: 0, vy: 0, vz: 0, life: 0.1, s0: 6 * k, s1: 11 * k, r: 1, g: 0.85, b: 0.6, a: 1, fade: 1, drag: 0, grav: 0 });
+        for (let i = 0; i < 20 * scale + 2; i++) {
+            const sp = rnd(3, 11) * k;
+            const d = new THREE.Vector3(randn(), Math.abs(randn()) + 0.5, randn()).normalize();
+            fireFx.emit({ x: p.x, y: p.y + 1, z: p.z, vx: d.x * sp, vy: d.y * sp, vz: d.z * sp, life: rnd(0.25, 0.6) * k + 0.1,
+                s0: rnd(2, 4) * k, s1: rnd(5, 9) * k, r: 1, g: 0.8, b: 0.45, r1: 0.8, g1: 0.25, b1: 0.05, cs: 1.5, a: 1, fade: 1.5, drag: 3, grav: -1 });
+        }
+        // Earth and stones thrown up and out
+        for (let i = 0; i < 70 * scale + 3; i++) {
+            const a = Math.random() * Math.PI * 2, out = rnd(2, 13) * k;
+            smokeFx.emit({ x: p.x, y: p.y + 0.5, z: p.z, vx: Math.cos(a) * out, vy: rnd(9, 30) * k, vz: Math.sin(a) * out,
+                life: rnd(1.4, 3.2) * k, s0: rnd(0.5, 1.3) * k, s1: rnd(0.4, 0.8) * k, r: 0.2, g: 0.16, b: 0.11, a: 1, fade: 0.4, drag: 0.35, grav: GRAVITY,
+                floor: p.y - 0.5 });
+        }
+        // Dust: a column that slumps into a drifting cloud
+        for (let i = 0; i < 46 * scale + 2; i++) {
+            const gray = rnd(0.3, 0.45);
+            smokeFx.emit({ x: p.x + randn() * 2 * k, y: p.y + rnd(0, 4) * k, z: p.z + randn() * 2 * k,
+                vx: randn() * 3 * k + Sea.wind.x * 2.2, vy: rnd(2, 12) * k, vz: randn() * 3 * k + Sea.wind.y * 2.2,
+                delay: rnd(0, 0.4), life: rnd(5, 11) * k + 1, s0: rnd(2.5, 4.5) * k, s1: rnd(11, 22) * k,
+                r: 0.48, g: 0.4, b: 0.3, r1: gray, g1: gray * 0.95, b1: gray * 0.88, cs: 2, a: 0.5, fade: 1.6, drag: 1.1, grav: -0.15 });
+        }
+        if (scale >= 0.5) {
+            const ring = new THREE.Mesh(shockGeo, shockMat.clone());
+            ring.position.copy(p).y += 0.6;
+            scene.add(ring);
+            shockwaves.push({ mesh: ring, t: 0, life: 0.4, r: 26 * k });
+            if (p.distanceTo(camera.position) < 1500) {
+                blastLight.position.copy(p).y += 4;
+                blastLight.intensity = 6 * k;
+            }
+        }
+    },
+    // Fuel or ammunition going up: a rolling fireball that climbs on its own heat, then a column of black smoke
+    fuelBlast(p, scale = 1) {
+        FX.explosion(p, 2.2 * scale);
+        for (let i = 0; i < 70 * scale; i++) {
+            const a = Math.random() * Math.PI * 2, out = rnd(0, 9) * scale;
+            fireFx.emit({ x: p.x + Math.cos(a) * out, y: p.y + rnd(0, 6), z: p.z + Math.sin(a) * out,
+                vx: Math.cos(a) * rnd(1, 6), vy: rnd(8, 26) * scale, vz: Math.sin(a) * rnd(1, 6), delay: rnd(0, 0.5),
+                life: rnd(1.2, 2.8), s0: rnd(7, 12) * scale, s1: rnd(16, 28) * scale,
+                r: 1, g: 0.75, b: 0.35, r1: 0.7, g1: 0.18, b1: 0.03, cs: 1.3, a: 1, fade: 1.4, drag: 1.2, grav: -3 });
+        }
+        for (let i = 0; i < 90 * scale; i++) {
+            smokeFx.emit({ x: p.x + randn() * 6, y: p.y + rnd(4, 20), z: p.z + randn() * 6,
+                vx: randn() * 3 + Sea.wind.x * 3, vy: rnd(6, 18), vz: randn() * 3 + Sea.wind.y * 3, delay: rnd(0.3, 2.5),
+                life: rnd(10, 20), s0: rnd(6, 10) * scale, s1: rnd(30, 55) * scale,
+                r: 0.12, g: 0.1, b: 0.09, a: 0.65, fade: 1.6, drag: 0.6, grav: -0.4 });
+        }
+    },
+    // Anti-aircraft burst: a flash and a puff of black smoke that hangs in the air. size 1 = 5" flak
+    flak(p, size = 1) {
+        fireFx.emit({ x: p.x, y: p.y, z: p.z, vx: 0, vy: 0, vz: 0, life: 0.09, s0: 5 * size, s1: 9 * size, r: 1, g: 0.8, b: 0.5, a: 1, fade: 1, drag: 0, grav: 0 });
+        for (let i = 0; i < 6 + 10 * size; i++) {
+            const d = new THREE.Vector3(randn(), randn(), randn()).normalize(), sp = rnd(2, 9) * size;
+            smokeFx.emit({ x: p.x, y: p.y, z: p.z, vx: d.x * sp + Sea.wind.x, vy: d.y * sp, vz: d.z * sp + Sea.wind.y,
+                life: rnd(4, 8), s0: 2 * size, s1: rnd(6, 11) * size, r: 0.09, g: 0.085, b: 0.08, a: 0.7, fade: 1.3, drag: 2.2, grav: -0.05 });
+        }
+    },
+    // Small-calibre hit on steel: a spray of sparks and a wisp of smoke
+    spark(p, n = 10) {
+        for (let i = 0; i < n; i++) {
+            const d = new THREE.Vector3(randn(), Math.abs(randn()) * 0.6, randn()).normalize(), sp = rnd(8, 30);
+            fireFx.emit({ x: p.x, y: p.y, z: p.z, vx: d.x * sp, vy: d.y * sp, vz: d.z * sp, life: rnd(0.2, 0.5),
+                s0: rnd(0.3, 0.6), s1: 0.15, r: 1, g: 0.85, b: 0.5, a: 1, fade: 0.8, drag: 1, grav: GRAVITY });
+        }
+        smokeFx.emit({ x: p.x, y: p.y, z: p.z, vx: Sea.wind.x, vy: 1.5, vz: Sea.wind.y, life: rnd(1.5, 3), s0: 0.8, s1: 3.5,
+            r: 0.35, g: 0.34, b: 0.33, a: 0.4, drag: 1, grav: -0.2 });
+    },
     // Surface bubbles above a running torpedo
     bubbles(x, y, z, strength) {
         smokeFx.emit({ x: x + randn() * 0.4, y: y + 0.1, z: z + randn() * 0.4, vx: 0, vy: 0.2, vz: 0,

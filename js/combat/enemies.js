@@ -4,7 +4,8 @@
 const ENEMY_TYPES = {
     maru: { build: () => IJN.maru(), name: 'Transport', hp: 12, speed: 5.2, turn: 1.0, gunRange: 6500, reload: 11, torps: 0, score: 100, draft: 6.2 },
     destroyer: { build: () => IJN.destroyer(), name: 'Destroyer', hp: 14, speed: 17, turn: 2.8, gunRange: 11500, reload: 8, torps: 6, score: 300, draft: 3.4, engage: 7000 },
-    cruiser: { build: () => IJN.cruiser(), name: 'Light Cruiser', hp: 32, speed: 15.5, turn: 1.6, gunRange: 14000, reload: 10, torps: 8, score: 800, draft: 4.8, engage: 11000 }
+    cruiser: { build: () => IJN.cruiser(), name: 'Light Cruiser', hp: 32, speed: 15.5, turn: 1.6, gunRange: 14000, reload: 10, torps: 8, score: 800, draft: 4.8, engage: 11000 },
+    barge: { build: () => IJN.daihatsu(), name: 'Landing barge', hp: 2, speed: 4.2, turn: 9, gunRange: 0, reload: 99, torps: 0, score: 60, draft: 0.9 }
 };
 const DYE_COLORS = [[0.95, 0.45, 0.45], [0.95, 0.9, 0.45], [0.55, 0.95, 0.6], [0.95, 0.95, 0.97]];
 const enemies = [];
@@ -12,6 +13,7 @@ let enemySerial = 0;
 
 function spawnEnemy(typeKey, x, z, heading) {
     const type = ENEMY_TYPES[typeKey];
+    if (typeKey !== 'barge') ({ x, z } = Islands.clearSpot(x, z, 600));   // never start on a reef
     const model = type.build();
     scene.add(model.group);
     const e = {
@@ -43,7 +45,13 @@ function updateEnemies(dt, t) {
         if (!e.sinking) {
             let desired = e.heading, desiredSpeed = e.type.speed;
             e.weaveT += dt;
-            if (e.typeKey === 'maru') {
+            if (e.typeKey === 'barge') {
+                // Moored at the pier until the alarm goes, then off along the coast at full speed
+                if (e.fleeing || (e.home && e.home.alert)) {
+                    e.fleeing = true;
+                    desired = brg + Math.PI + e.side * 0.7;
+                } else desiredSpeed = 0;
+            } else if (e.typeKey === 'maru') {
                 // Transports hold the convoy course and zig-zag once they know we are near
                 desired = e.convoyHeading;
                 if (d < 9000) {
@@ -62,10 +70,27 @@ function updateEnemies(dt, t) {
                 desired = brg + e.side * (1.2 + 0.35 * Math.sin(e.weaveT / 14));
                 desiredSpeed = e.type.speed * 0.85;
             }
+            // Keep off the islands: look ahead for shoal water and turn for open sea
+            e.navT = (e.navT || 0) - dt;
+            if (e.navT <= 0) {
+                e.navT = 0.5 + Math.random() * 0.2;
+                const h = Islands.steer(e.x, e.z, e.heading, desired, e.typeKey === 'barge' ? 300 : 700 + e.speed * 25, e.type.draft + 2);
+                e.navHeading = Math.abs(wrapAngle(h - desired)) > 0.01 ? h : null;
+            }
+            if (e.navHeading !== null && e.navHeading !== undefined) desired = e.navHeading;
+            if (e.typeKey === 'barge' && !e.fleeing) desired = e.heading;
             e.heading += Math.max(-e.type.turn * DEG * dt, Math.min(e.type.turn * DEG * dt, wrapAngle(desired - e.heading)));
-            e.speed = stepToward(e.speed, desiredSpeed, 0.25 * dt);
+            e.speed = stepToward(e.speed, desiredSpeed, (e.typeKey === 'barge' ? 0.8 : 0.25) * dt);
             e.x += Math.sin(e.heading) * e.speed * dt;
             e.z += Math.cos(e.heading) * e.speed * dt;
+            // Aground: the bow is on the bottom
+            const bx = e.x + Math.sin(e.heading) * e.model.len * 0.45, bz = e.z + Math.cos(e.heading) * e.model.len * 0.45;
+            if (Islands.groundAt(bx, bz) > -e.type.draft) {
+                e.x -= Math.sin(e.heading) * e.speed * dt * 1.5;
+                e.z -= Math.cos(e.heading) * e.speed * dt * 1.5;
+                e.speed *= Math.exp(-dt * 2);
+                e.navT = 0;
+            }
 
             if (Game.hostile && dt > 0) {
                 enemyGunnery(e, d, dt);
@@ -101,7 +126,7 @@ function updateEnemies(dt, t) {
                 const fp = e.fires.length ? e.fires[Math.floor(Math.random() * e.fires.length)] : new THREE.Vector3(0, 6, 0);
                 FX.burn(e.obj.localToWorld(fp.clone()), Math.min(1, damage + 0.2));
             }
-            if (!e.sinking && Math.random() < dt * 3) {
+            if (!e.sinking && Math.random() < dt * 3 && (e.typeKey !== 'barge' || e.speed > 1)) {
                 const s = e.model.stacks[Math.floor(Math.random() * e.model.stacks.length)];
                 const p = e.obj.localToWorld(s.clone());
                 smokeFx.emit({ x: p.x, y: p.y, z: p.z, vx: 3 - Math.sin(e.heading) * e.speed * 0.8, vy: 2.5, vz: 1.5 - Math.cos(e.heading) * e.speed * 0.8,

@@ -230,6 +230,7 @@ const Gfx = (() => {
         // Sky, sea, particles
         Clouds.setQuality(g.clouds);
         if (ocean && ocean.userData.quality !== g.ocean) rebuildOcean(g.ocean);
+        if (typeof Islands !== 'undefined') Islands.setQuality(g.terrain ?? 1);
         // Post-processing on/off, MSAA change needs new targets
         const wantPost = !!g.post;
         if (post && (!wantPost || (post.scene.isWebGLMultisampleRenderTarget ? 'msaa' : 'x') !== (g.aa === 'msaa' ? 'msaa' : 'x'))) disposePost();

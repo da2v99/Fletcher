@@ -167,7 +167,8 @@ const OCEAN_SHADE_GLSL = `
     }
 `;
 
-// Turquoise shallows and surf around the islands (blobs: xy = centre, z = radius; filled in by islands.js).
+// Turquoise shallows and reefs around the islands (blobs: xy = centre, z = radius; filled in by islands.js; the
+// surf itself is a strip along the real coastline, islands.js).
 // The light ocean levels find the shore distance per vertex, keeping the blob array out of the pixel shader.
 const ISLAND_BLOBS = 24;
 const islandBlobU = Array.from({ length: ISLAND_BLOBS }, () => new THREE.Vector3(0, 0, 0));
@@ -186,10 +187,9 @@ const ISLAND_DECL = `
 const ISLAND_SHADE = `
     vec3 islandShallows(vec2 xz, float dist, float shore) {
         if (shore > 400.0) return vec3(0.0);
-        float shallow = 1.0 - smoothstep(-20.0, 260.0, shore);
-        float surf = (1.0 - smoothstep(0.0, 22.0, abs(shore - 8.0 + 4.0 * sin(xz.x * 0.05 + uTime * 0.9) * sin(xz.y * 0.043)))) * 0.55;
-        surf *= smoothstep(0.35, 0.6, vnoise(xz * 0.08 + uTime * 0.25));
-        return vec3(0.0, 0.16, 0.13) * shallow + vec3(0.8) * surf * (1.0 - smoothstep(600.0, 3000.0, dist));
+        float shallow = 1.0 - smoothstep(-40.0, 280.0, shore);
+        float reef = smoothstep(0.45, 0.75, vnoise(xz * 0.012)) * (1.0 - smoothstep(0.0, 160.0, abs(shore - 60.0)));
+        return vec3(0.0, 0.17, 0.14) * shallow + vec3(0.03, 0.08, 0.05) * reef;
     }
 `;
 

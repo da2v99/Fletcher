@@ -24,6 +24,8 @@ window.addEventListener('load', () => {
     scene.add(rain.lines);
 
     initEffects();
+    Tracers.init();
+    Islands.init();
     initShells();
     initTorpedoes();
     initPlayerWeapons();
@@ -187,6 +189,8 @@ function animate() {
 
     TouchUI.update(realDt);
     updateCamera(realDt, simTime);
+    Islands.update(dt, simTime);
+    Tracers.update(dt, simTime);
     updateOcean(ocean, simTime, phys.pos, phys.quat, phys.vel);
     sunLight.target.position.copy(phys.pos);
     sunLight.position.copy(phys.pos).addScaledVector(SUN_DIR, 200);

@@ -441,5 +441,23 @@ const IJN = (() => {
         return { group: g, turrets: [gun, bowGun], torpLaunchers: [], stacks, len: L, beam: 15.2, top: 16 };
     }
 
-    return { destroyer, maru, cruiser };
+    // Daihatsu Type 14 m landing barge: open well with a bow ramp, a small armoured coxswain's position aft
+    function daihatsu() {
+        const m = mats();
+        const g = new THREE.Group();
+        const L = 14.9, B = 3.3;
+        const hull = add(g, prism([[-B / 2, -L / 2], [B / 2, -L / 2], [B / 2, L / 2 - 2.2], [B / 2 - 0.5, L / 2], [-B / 2 + 0.5, L / 2], [-B / 2, L / 2 - 2.2]], -0.8, 1.2), m.grayDark);
+        hull.receiveShadow = true;
+        add(g, Box(B - 0.5, 0.1, L - 4.5), m.wood, 0, 0.2, -0.6);                   // well deck
+        const ramp = add(g, Box(B - 1.0, 1.7, 0.18), m.gray, 0, 1.0, L / 2 - 0.3);   // bow ramp, raised
+        ramp.rotation.x = -0.12;
+        add(g, Box(1.8, 1.3, 1.6), m.gray, 0, 1.85, -L / 2 + 1.6);                  // coxswain's shelter
+        add(g, Box(1.6, 0.25, 0.1), m.glass, 0, 2.2, -L / 2 + 2.42);
+        add(g, Cyl(0.12, 0.12, 1.1, 6), m.black, 0.6, 2.3, -L / 2 + 0.6);           // diesel exhaust
+        // A few troops and supply crates in the well
+        for (let i = 0; i < 5; i++) add(g, Box(0.9, 0.7, 1.1), m.wood, (i % 2 ? 0.6 : -0.6), 0.6, 3 - i * 1.6);
+        return { group: g, turrets: [], torpLaunchers: [], stacks: [new THREE.Vector3(0.6, 3, -L / 2 + 0.6)], len: L, beam: B, top: 3 };
+    }
+
+    return { destroyer, maru, cruiser, daihatsu };
 })();

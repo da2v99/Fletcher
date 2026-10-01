@@ -90,6 +90,8 @@ const GFX_ITEMS = [
     { section: 'World' },
     { label: 'Ocean detail', type: 'select', numeric: true, options: [[0, 'Low (phones)'], [1, 'Medium'], [2, 'High (per pixel)']],
       get: () => Settings.gfx.ocean, set: gfxSet('ocean') },
+    { label: 'Islands', type: 'select', numeric: true, options: [[0, 'Low (phones)'], [1, 'Medium'], [2, 'High (dense jungle)']],
+      get: () => Settings.gfx.terrain, set: gfxSet('terrain') },
     { label: 'Clouds', type: 'select', numeric: true, options: [[0, 'Painted'], [1, 'Volumetric low'], [2, 'Volumetric'], [3, 'Volumetric high']],
       get: () => Settings.gfx.clouds, set: gfxSet('clouds') },
     { label: 'Shadows', type: 'select', numeric: true, options: [[0, 'Off'], [1, 'Low'], [2, 'Medium'], [3, 'High']],

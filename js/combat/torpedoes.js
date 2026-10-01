@@ -49,7 +49,15 @@ function updateTorpedoes(dt, t) {
         }
 
         let hit = null;
-        if (tp.owner === 'player') {
+        // Into the shallows: the warhead goes off on the bottom or the beach
+        const ground = Islands.groundAt(tp.pos.x, tp.pos.z);
+        if (ground > tp.pos.y - 0.6) {
+            const p = tp.pos.clone().setY(Math.max(surface, ground));
+            if (ground > surface) FX.dirt(p, 2.5); else FX.waterColumn(p);
+            playBoom(p, 1.6, 400, 3.5);
+            Islands.impact(p, 2.5, null, tp.owner === 'player');
+            hit = true;
+        } else if (tp.owner === 'player') {
             hit = enemyHitTest(tp.pos, 3);
             if (hit) onEnemyTorpedoHit(hit, tp.pos.clone().setY(surface));
         } else {

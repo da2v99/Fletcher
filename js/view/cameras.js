@@ -60,9 +60,13 @@ function updateCamera(dt, t) {
         } else director.aimValid = false;
     }
 
-    if (cameraMode !== 'captain' && waterVisible()) {
-        const wh = waterHeight(camera.position.x, camera.position.z, t) + 1.5;
-        if (camera.position.y < wh) camera.position.y = wh;
+    if (cameraMode !== 'captain') {
+        let floor = waterVisible() ? waterHeight(camera.position.x, camera.position.z, t) + 1.5 : -1e9;
+        floor = Math.max(floor, Islands.groundAt(camera.position.x, camera.position.z) + 3);   // never inside a hill
+        if (camera.position.y < floor) camera.position.y = floor;
     }
+    // Near plane: as far out as the view allows, so distant coastlines don't fight the sea in the depth buffer
+    const near = cameraMode === 'captain' ? (captain.binoc ? 2.5 : 0.25) : 2;
+    if (camera.near !== near) { camera.near = near; camera.updateProjectionMatrix(); }
     applyCameraShake(dt);
 }

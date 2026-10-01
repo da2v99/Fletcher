@@ -223,11 +223,10 @@ const TouchUI = (() => {
     // With nothing locked, FIRE and LOCK take the ship nearest the middle of the view (aim assist)
     function lockNearestToCentre() {
         let best = null, bestD = Infinity;
-        enemies.forEach(e => {
-            if (e.sinking) return;
+        lockables().forEach(e => {
             const v = lockPoint(e, new THREE.Vector3()).project(camera);
             if (v.z >= 1 || Math.abs(v.x) > 1.1 || Math.abs(v.y) > 1.1) return;
-            const d = Math.hypot(v.x, v.y * 0.6);
+            const d = Math.hypot(v.x, v.y * 0.6) * (e.isStructure ? 1.6 : 1);   // ships first
             if (d < bestD) { bestD = d; best = e; }
         });
         if (best && bestD < 0.9) {
