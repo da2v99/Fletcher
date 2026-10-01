@@ -236,3 +236,61 @@ function colorKit() {
     };
     return api;
 }
+
+// --- Draw-call merge: a model's hundreds of small static parts become one mesh per material for each moving
+// assembly. Movers (turrets, gun cradles, mounts, directors...) keep their own transforms; parts that ride on a
+// mover are merged relative to it. Movers that are meshes themselves (propellers, a waving flag) stay as they are.
+const _mmx = new THREE.Matrix4();
+function mergeStatic(root, movers) {
+    root.updateMatrixWorld(true);
+    const movable = new Set(movers.filter(Boolean));
+    const owner = o => { let p = o.parent; while (p && p !== root && !movable.has(p)) p = p.parent; return p || root; };
+    const buckets = new Map();
+    root.traverse(o => {
+        if (!o.isMesh || o.isInstancedMesh || movable.has(o) || Array.isArray(o.material) || o.children.length || !o.visible) return;
+        const mat = o.material, g = o.geometry;
+        const need = ['position', 'normal'];
+        if (mat.map || mat.alphaMap || mat.normalMap || mat.roughnessMap || mat.bumpMap) need.push('uv');
+        if (mat.vertexColors) need.push('color');
+        let sig = '';
+        for (const a of need) {
+            const at = g.attributes[a];
+            if (!at) { if (a === 'normal') continue; return; }
+            if (at.isInterleavedBufferAttribute || !(at.array instanceof Float32Array) || at.normalized) return;
+            sig += a + at.itemSize;
+        }
+        const node = owner(o);
+        const key = node.uuid + '|' + mat.uuid + '|' + (o.castShadow ? 1 : 0) + (o.receiveShadow ? 1 : 0) + '|' + o.renderOrder + '|' + sig;
+        let b = buckets.get(key);
+        if (!b) buckets.set(key, b = { node, mat, cast: o.castShadow, recv: o.receiveShadow, order: o.renderOrder, need, parts: [] });
+        b.parts.push(o);
+    });
+    let removed = 0;
+    buckets.forEach(b => {
+        if (b.parts.length < 2) return;
+        const inv = new THREE.Matrix4().copy(b.node.matrixWorld).invert();
+        const geos = b.parts.map(o => {
+            const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
+            if (!g.attributes.normal) g.computeVertexNormals();
+            g.applyMatrix4(_mmx.multiplyMatrices(inv, o.matrixWorld));
+            return g;
+        });
+        const total = geos.reduce((s, g) => s + g.attributes.position.count, 0);
+        const merged = new THREE.BufferGeometry();
+        b.need.forEach(name => {
+            const size = geos[0].attributes[name].itemSize, arr = new Float32Array(total * size);
+            let off = 0;
+            geos.forEach(g => { const a = g.attributes[name]; arr.set(a.array.subarray(0, a.count * size), off); off += a.count * size; });
+            merged.setAttribute(name, new THREE.BufferAttribute(arr, size));
+        });
+        merged.computeBoundingSphere();
+        const mesh = new THREE.Mesh(merged, b.mat);
+        mesh.castShadow = b.cast;
+        mesh.receiveShadow = b.recv;
+        mesh.renderOrder = b.order;
+        b.node.add(mesh);
+        b.parts.forEach(o => { o.parent.remove(o); removed++; });
+        geos.forEach(g => g.dispose());
+    });
+    return removed;
+}

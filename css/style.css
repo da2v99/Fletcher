@@ -329,3 +329,6 @@ body.touch #bannerTitle { font-size: 34px; }
 
 /* Manning an AA gun: the gunsight replaces the key help */
 body.aaview #keys { display: none; }
+.touch-help { display: none; margin-top: 18px; font-size: 13px; line-height: 1.5; color: var(--muted); }
+body.touch .touch-help { display: block; }
+body.touch .controls-grid { display: none; }

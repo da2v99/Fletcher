@@ -11,10 +11,33 @@ const DYE_COLORS = [[0.95, 0.45, 0.45], [0.95, 0.9, 0.45], [0.55, 0.95, 0.6], [0
 const enemies = [];
 let enemySerial = 0;
 
+// Each type is built once, its static parts merged (a few dozen draw calls instead of hundreds), then cloned
+const enemyTemplates = {};
+function enemyModel(typeKey) {
+    let tpl = enemyTemplates[typeKey];
+    if (!tpl) {
+        const m = ENEMY_TYPES[typeKey].build();
+        m.turrets.forEach((t, i) => { t.name = 'tur' + i; if (t.userData.cradle) t.userData.cradle.name = 'cra' + i; });
+        m.torpLaunchers.forEach((t, i) => { t.name = 'tl' + i; });
+        mergeStatic(m.group, [...m.turrets, ...m.turrets.map(t => t.userData.cradle), ...m.torpLaunchers]);
+        const meta = m.turrets.map(t => ({ stowYaw: t.userData.stowYaw, aft: t.userData.aft }));
+        m.group.traverse(o => { o.userData = {}; });   // object references can't go through clone()
+        tpl = enemyTemplates[typeKey] = { m, meta };
+    }
+    const m = tpl.m, g = m.group.clone();
+    const turrets = m.turrets.map((t, i) => {
+        const c = g.getObjectByName('tur' + i);
+        c.userData = { cradle: g.getObjectByName('cra' + i), stowYaw: tpl.meta[i].stowYaw, aft: tpl.meta[i].aft };
+        return c;
+    });
+    const torpLaunchers = m.torpLaunchers.map((t, i) => g.getObjectByName('tl' + i));
+    return { group: g, turrets, torpLaunchers, stacks: m.stacks.map(v => v.clone()), len: m.len, beam: m.beam, top: m.top };
+}
+
 function spawnEnemy(typeKey, x, z, heading) {
     const type = ENEMY_TYPES[typeKey];
     if (typeKey !== 'barge') ({ x, z } = Islands.clearSpot(x, z, 600));   // never start on a reef
-    const model = type.build();
+    const model = enemyModel(typeKey);
     scene.add(model.group);
     const e = {
         id: ++enemySerial, typeKey, type, model, obj: model.group,

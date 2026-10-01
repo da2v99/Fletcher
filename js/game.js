@@ -72,6 +72,8 @@ const Game = {
     setPaused(p) {
         if (!this.running || this.over) return;
         this.paused = p;
+        director.trigger = false;
+        AA.trigger = false;
         if (p && document.pointerLockElement) document.exitPointerLock();
         showScreen(p ? 'pauseMenu' : null);
     },

@@ -455,6 +455,12 @@ function buildShip(scene) {
     shipGroup.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(rigPts), new THREE.LineBasicMaterial({ color: 0x2a2d30 })));
 
     shipGroup.traverse(o => { if (o.isMesh && o.castShadow === undefined) o.castShadow = true; });
+    // Hundreds of fittings -> a few dozen draw calls; everything that trains, elevates or turns stays movable
+    const ud = shipGroup.userData;
+    mergeStatic(shipGroup, [
+        ...ud.turrets, ...ud.turrets.map(t => t.userData.barrel), ...ud.torpMounts, ud.mk37,
+        ...ud.aa.map(a => a.obj), ...ud.aa.map(a => a.obj.userData.barrel), ...ud.props, ud.flag
+    ]);
     scene.add(shipGroup);
     return shipGroup;
 }

@@ -52,9 +52,9 @@
 
     <div id="keys" class="panel">
         <b>W/S</b> engine order · <b>0</b> all stop · <b>A/D</b> rudder<br>
-        <b>Mouse</b> crosshair · <b>X</b> lock ship · <b>Space</b> fire · <b>T</b> torpedoes<br>
+        <b>Mouse</b> crosshair · <b>X</b> lock target · <b>Space</b> fire · <b>T</b> torpedoes<br>
         <b>LMB</b> pan · <b>RMB</b> orbit · <b>Wheel</b> zoom · <b>C</b> chase / orbit<br>
-        <b>B</b> captain's view · <b>Esc</b> pause
+        <b>B</b> captain's view · <b>G</b> AA gun · <b>Esc</b> pause
     </div>
 
     <div id="captainPanel">
@@ -62,7 +62,7 @@
         <div id="cpRange">RANGE ——</div>
         <div id="cpBearing"></div>
         <div id="cpGuns"></div>
-        <div id="cpHelp">Click to take the binoculars · Mouse: look · Right-click / Z / Wheel: binoculars &amp; zoom · X: lock / release ship · Left-click / Space: fire · T: torpedoes · Q / E: station · B: leave</div>
+        <div id="cpHelp">Click to take the binoculars · Mouse: look · Right-click / Z / Wheel: binoculars &amp; zoom · X: lock / release target · Left-click / Space: fire · T: torpedoes · Q / E: station · G: AA gun · B: leave</div>
     </div>
 
     <!-- ===== Menus ===== -->
@@ -71,7 +71,7 @@
             <div class="kicker">The Slot · Solomon Islands · 1943</div>
             <h1>FLETCHER</h1>
             <div class="subtitle">Destroyer Command</div>
-            <p>Take USS Fletcher (DD-445) against Japanese convoys and their escorts. Hunt them on radar, range them through the binoculars, and put five 5-inch guns and ten torpedoes to work. Mind the Long Lances.</p>
+            <p>Take USS Fletcher (DD-445) against Japanese convoys and their escorts, shore batteries and air raids. Hunt them on radar, range them through the binoculars, put five 5-inch guns and ten torpedoes to work, and man the 40 mm when the Vals come in. Mind the Long Lances and the shoals.</p>
             <button id="btnPatrol" class="btn primary">Begin Patrol</button>
             <button id="btnCruise" class="btn">Free Cruise</button>
             <button id="btnSettings" class="btn ghost">Weather &amp; Settings</button>
@@ -79,12 +79,14 @@
                 <span>W / S</span><span>Ring up engine orders</span>
                 <span>A / D</span><span>Rudder left / right</span>
                 <span>Mouse</span><span>Gun crosshair (guns follow it)</span>
-                <span>X</span><span>Lock the ship under the crosshair</span>
+                <span>X</span><span>Lock the ship, shore target or plane under the crosshair</span>
                 <span>Space</span><span>Fire the 5"/38s</span>
                 <span>B</span><span>Captain's view: binoculars and gun director</span>
                 <span>T</span><span>Launch a 5-torpedo spread</span>
+                <span>G</span><span>Man an AA gun (Q / E: next gun)</span>
                 <span>LMB / RMB</span><span>Pan / orbit the camera (C: back to chase)</span>
             </div>
+            <div class="touch-help">Drag the telegraph lever for speed · steer with the rudder slider, the wheel or by tilting the phone (Settings › Controls) · tap a target to lock it · hold FIRE · AA puts you on a 40 mm gun · VIEW for the bridge binoculars</div>
         </div>
     </div>
 
