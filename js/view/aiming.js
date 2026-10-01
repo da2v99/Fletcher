@@ -118,7 +118,9 @@ function updateThirdPersonAim() {
 
 function initThirdPersonAim() {
     const el = renderer.domElement;
+    // The crosshair follows a mouse or pen; on touch screens a tap locks instead (touch.js)
     window.addEventListener('pointermove', e => {
+        if (e.pointerType === 'touch') return;
         tpAim.x = e.clientX;
         tpAim.y = e.clientY;
         tpAim.onCanvas = e.target === el;

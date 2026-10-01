@@ -79,7 +79,26 @@ const phys = {
     floodPoint: new THREE.Vector3(0, -2, 0),   // where that water sits (drives list and trim)
     engine: 1                                  // fraction of full power still available
 };
-const drive = { order: STOP_IDX, thrust: 0, rudder: 0, left: false, right: false };
+// cmd: an analog rudder order in degrees (touch slider, wheel or tilt); A / D keys override it while held
+const drive = { order: STOP_IDX, thrust: 0, rudder: 0, left: false, right: false, cmd: null };
+
+// Ring up an engine order (keyboard, telegraph lever): bell and a haptic click when it changes
+function setEngineOrder(i) {
+    i = Math.max(0, Math.min(ORDERS.length - 1, i));
+    if (i === drive.order) return;
+    drive.order = i;
+    if (typeof playBell === 'function' && Settings.ctl.bell) playBell(i);
+    if (typeof haptic === 'function') haptic(12);
+}
+
+// Steady speed (m/s) each engine order settles at in calm water, for the telegraph's speed scale
+function orderSpeed(i) {
+    const f = ORDERS[i].f;
+    const T = Math.sign(f) * T_MAX * f * f * (f < 0 ? 0.6 : 1);
+    const a = Math.abs(T);
+    const u = (-2e4 + Math.sqrt(4e8 + 4 * K_DRAG * a)) / (2 * K_DRAG);
+    return Math.sign(T) * u;
+}
 
 function initPhysics() {
     const dz = 6;
@@ -145,7 +164,7 @@ function resetPhysics() {
     phys.flood = 0;
     phys.floodPoint.set(0, -2, 0);
     phys.engine = 1;
-    Object.assign(drive, { order: STOP_IDX, thrust: 0, rudder: 0, left: false, right: false });
+    Object.assign(drive, { order: STOP_IDX, thrust: 0, rudder: 0, left: false, right: false, cmd: null });
 }
 
 function stepPhysics(dt, t) {
@@ -327,7 +346,9 @@ function updateDrive(dt) {
     const f = ORDERS[drive.order].f;
     const target = Math.sign(f) * T_MAX * f * f * (f < 0 ? 0.6 : 1);
     drive.thrust += (target - drive.thrust) * Math.min(1, dt / 4);   // engine spool-up lag
-    const rTarget = (drive.right ? RUDDER_MAX : 0) - (drive.left ? RUDDER_MAX : 0);
+    const keys = drive.left || drive.right;
+    const rTarget = keys || drive.cmd === null ? (drive.right ? RUDDER_MAX : 0) - (drive.left ? RUDDER_MAX : 0)
+        : THREE.MathUtils.clamp(drive.cmd, -RUDDER_MAX, RUDDER_MAX);
     const step = RUDDER_RATE * dt;
     drive.rudder += Math.max(-step, Math.min(step, rTarget - drive.rudder));
 }

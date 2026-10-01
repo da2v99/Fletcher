@@ -2,6 +2,7 @@
 // 'captain' (bridge / binoculars) and 'cinematic' (slow fly-around for the menus).
 
 let cameraMode = 'cinematic';
+let cameraGrabbedFrom = null;   // the mode a drag switched away from (a touch tap switches back)
 const lastShipPos = new THREE.Vector3();
 const cine = { angle: 2.2, radius: 150, height: 34 };
 
@@ -26,7 +27,7 @@ function cycleCamera() {
 // Capture-phase listeners run before OrbitControls' own, so the same drag carries straight on.
 function initCameraInput() {
     const el = renderer.domElement;
-    const grab = () => { if (Game.running && cameraMode === 'chase') setCameraMode('orbit', true); };
+    const grab = () => { if (Game.running && cameraMode === 'chase') { cameraGrabbedFrom = 'chase'; setCameraMode('orbit', true); } };
     el.addEventListener('pointerdown', e => { if (e.button === 0 || e.button === 2) grab(); }, { capture: true });
     el.addEventListener('wheel', grab, { capture: true });
     el.addEventListener('contextmenu', e => { if (!captain.active) e.preventDefault(); });
@@ -39,7 +40,7 @@ function updateCamera(dt, t) {
         updateCaptainCamera(dt);
     } else if (cameraMode === 'chase') {
         const desired = new THREE.Vector3(phys.pos.x - fwdH.x * 85, phys.pos.y + 26, phys.pos.z - fwdH.y * 85);
-        camera.position.lerp(desired, 1 - Math.exp(-dt * 1.5));
+        camera.position.lerp(desired, 1 - Math.exp(-dt * 2.6));
         camera.lookAt(phys.pos.x + fwdH.x * 25, phys.pos.y + 6, phys.pos.z + fwdH.y * 25);
     } else if (cameraMode === 'orbit') {
         const delta = phys.pos.clone().sub(lastShipPos);

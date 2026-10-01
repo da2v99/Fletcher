@@ -90,3 +90,31 @@ function playAlarm() {
         o.stop(t0 + 0.5);
     }
 }
+
+// Engine-order telegraph: the double ring of the bridge telegraph answering from the engine room
+function playBell(order) {
+    if (!audio.ctx) return;
+    const ctx = audio.ctx;
+    const base = 1180 + (order === undefined ? 0 : (order - 3) * 18);
+    [0, 0.17].forEach((d, k) => {
+        const t0 = ctx.currentTime + d;
+        [1, 2.76, 5.4].forEach((h, j) => {
+            const o = ctx.createOscillator();
+            o.type = 'sine';
+            o.frequency.value = base * h * (k ? 0.985 : 1);
+            const g = ctx.createGain();
+            g.gain.setValueAtTime(0.0001, t0);
+            g.gain.exponentialRampToValueAtTime(0.05 / (j + 1), t0 + 0.005);
+            g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.9 / (j + 1));
+            o.connect(g).connect(audio.master);
+            o.start(t0);
+            o.stop(t0 + 1);
+        });
+    });
+}
+
+// Short vibration on phones that support it
+function haptic(ms) {
+    if (!Settings.ctl.haptics || !navigator.vibrate) return;
+    try { navigator.vibrate(ms); } catch (e) { /* not allowed before a user gesture */ }
+}

@@ -32,6 +32,7 @@ window.addEventListener('load', () => {
     initCameraInput();
     initMenus();
     initKeys();
+    TouchUI.apply();
     applyWeather();
     Gfx.apply();
     Clouds.update(renderer, true);
@@ -57,7 +58,7 @@ function initRenderer() {
 
     controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
-    controls.dampingFactor = 0.05;
+    controls.dampingFactor = 0.12;   // crisp, with just enough glide
     controls.maxPolarAngle = Math.PI / 2 - 0.02;
     controls.minDistance = 8;
     controls.maxDistance = 600;
@@ -97,9 +98,9 @@ function initKeys() {
         if (k === 'd' || k === 'arrowright') drive.right = true;
         if (k === ' ') { ensureAudio(); director.trigger = true; }
         if (e.repeat) return;
-        if (k === 'w' || k === 'arrowup') drive.order = Math.min(ORDERS.length - 1, drive.order + 1);
-        if (k === 's' || k === 'arrowdown') drive.order = Math.max(0, drive.order - 1);
-        if (k === '0') drive.order = STOP_IDX;
+        if (k === 'w' || k === 'arrowup') { ensureAudio(); setEngineOrder(drive.order + 1); }
+        if (k === 's' || k === 'arrowdown') { ensureAudio(); setEngineOrder(drive.order - 1); }
+        if (k === '0') setEngineOrder(STOP_IDX);
         if (k === 'x') {
             if (captain.active) toggleLock(window.innerWidth / 2, window.innerHeight / 2);
             else if (tpAim.onCanvas) toggleLock(tpAim.x, tpAim.y);
@@ -184,6 +185,7 @@ function animate() {
         p.needsUpdate = true;
     }
 
+    TouchUI.update(realDt);
     updateCamera(realDt, simTime);
     updateOcean(ocean, simTime, phys.pos, phys.quat, phys.vel);
     sunLight.target.position.copy(phys.pos);

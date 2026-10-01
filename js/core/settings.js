@@ -21,8 +21,8 @@ const Device = (() => {
 // shadows: 0 off, 1 1024, 2 2048, 3 4096 · clouds: 0 painted sky, 1-3 raymarched, more steps and resolution
 // ocean: 0 per-vertex lighting (phones), 1 per-vertex + pixel detail, 2 full per-pixel surface
 const GFX_PRESETS = {
-    low:       { renderScale: 0.75, maxDpr: 1,    shadows: 0, clouds: 1, ocean: 0, post: false, bloom: 0,    aa: 'off',  grade: 'natural',   vignette: 0.25, grain: 0,    letterbox: false, shafts: false, flare: false, particles: 0.5 },
-    medium:    { renderScale: 0.85, maxDpr: 1.5,  shadows: 1, clouds: 1, ocean: 1, post: true,  bloom: 0.45, aa: 'fxaa', grade: 'cinematic', vignette: 0.35, grain: 0.03, letterbox: false, shafts: false, flare: true,  particles: 0.75 },
+    low:       { renderScale: 1,    maxDpr: 1,    shadows: 0, clouds: 1, ocean: 0, post: false, bloom: 0,    aa: 'off',  grade: 'natural',   vignette: 0.25, grain: 0,    letterbox: false, shafts: false, flare: false, particles: 0.5 },
+    medium:    { renderScale: 1,    maxDpr: 1.5,  shadows: 1, clouds: 1, ocean: 1, post: true,  bloom: 0.45, aa: 'fxaa', grade: 'cinematic', vignette: 0.35, grain: 0.03, letterbox: false, shafts: false, flare: true,  particles: 0.75 },
     high:      { renderScale: 1,    maxDpr: 2,    shadows: 2, clouds: 2, ocean: 2, post: true,  bloom: 0.55, aa: 'fxaa', grade: 'cinematic', vignette: 0.4,  grain: 0.035, letterbox: false, shafts: true,  flare: true,  particles: 1 },
     ultra:     { renderScale: 1,    maxDpr: 2,    shadows: 3, clouds: 3, ocean: 2, post: true,  bloom: 0.6,  aa: 'msaa', grade: 'cinematic', vignette: 0.45, grain: 0.04, letterbox: false, shafts: true,  flare: true,  particles: 1 },
     cinematic: { renderScale: 1,    maxDpr: 2,    shadows: 3, clouds: 3, ocean: 2, post: true,  bloom: 0.8,  aa: 'msaa', grade: 'filmic',    vignette: 0.6,  grain: 0.06, letterbox: true,  shafts: true,  flare: true,  particles: 1 }
@@ -30,7 +30,7 @@ const GFX_PRESETS = {
 const PRESET_NAMES = { auto: 'Auto (this device)', low: 'Low · phones, battery', medium: 'Medium · phones, laptops', high: 'High', ultra: 'Ultra', cinematic: 'Cinematic' };
 
 function autoPreset() {
-    if (Device.mobile) return Device.memory <= 3 || Device.cores <= 4 ? 'low' : 'medium';
+    if (Device.mobile) return Device.memory <= 2 || Device.cores <= 2 ? 'low' : 'medium';
     return Device.cores <= 2 ? 'medium' : 'high';
 }
 
