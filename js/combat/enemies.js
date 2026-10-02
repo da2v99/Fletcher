@@ -131,7 +131,7 @@ function updateEnemies(dt, t) {
             }
         } else {
             e.sinkT += dt;
-            e.speed = Math.max(0, e.speed - dt * 0.8);
+            e.speed = e.onBottom ? 0 : Math.max(0, e.speed - dt * 0.8);
             e.x += Math.sin(e.heading) * e.speed * dt;
             e.z += Math.cos(e.heading) * e.speed * dt;
         }
@@ -147,11 +147,17 @@ function updateEnemies(dt, t) {
         const W = e.obj.userData.wreck, broken = W && W.broken;
         // Broken in two the halves pivot up and go down fast; whole, she settles and lists as she floods
         const sink = e.sinking ? (broken ? e.sinkT * e.sinkT * 0.014 + e.sinkT * 0.05 : e.sinkT * e.sinkT * 0.01 + e.sinkT * 0.12) : 0;
-        const tilt = e.sinking ? e.sinkT : 0;
-        e.obj.position.set(e.x, (hb + hs + hp + hst) / 4 - sink, e.z);
-        e.obj.rotation.set(Math.atan2(hs - hb, 2 * L) * 0.8 + (broken ? 0 : tilt * 0.004 * e.side), e.heading, Math.atan2(hp - hst, 2 * B) * 0.6 + tilt * (broken ? 0.005 : 0.012) * e.side, 'YXZ');
+        const tilt = e.sinking ? Math.min(e.sinkT, 32) : 0;
+        if (!e.onBottom) {
+            let y = (hb + hs + hp + hst) / 4 - sink;
+            // On the bottom she stays: no more rising and falling with the waves, no more way on
+            const bed = Math.max(Islands.groundAt(e.x, e.z), -70) + e.type.draft * 0.7;
+            if (e.sinking && y <= bed) { y = bed; e.onBottom = true; e.speed = 0; e.bottomT = 0; }
+            e.obj.position.set(e.x, y, e.z);
+            e.obj.rotation.set(Math.atan2(hs - hb, 2 * L) * (e.sinking ? 0.3 : 0.8) + (broken ? 0 : tilt * 0.004 * e.side), e.heading, Math.atan2(hp - hst, 2 * B) * (e.sinking ? 0.3 : 0.6) + tilt * (broken ? 0.005 : 0.012) * e.side, 'YXZ');
+        } else e.bottomT += dt;
         e.obj.updateMatrixWorld(true);
-        if (broken) Wreck.pose(e.obj, dt);
+        if (broken) Wreck.pose(e.obj, e.onBottom ? 0 : dt);
 
         // Fires and funnel smoke
         const damage = 1 - e.hp / e.type.hp;
@@ -169,7 +175,7 @@ function updateEnemies(dt, t) {
                     life: rnd(6, 10), s0: 3, s1: 16, r: 0.25, g: 0.24, b: 0.24, a: 0.35, drag: 0.4, grav: -0.2 });
             }
         }
-        if (sink > (broken ? 28 : 20) || d > 26000) {
+        if ((e.onBottom && e.bottomT > 300) || d > 26000) {   // wrecks lie on the bottom a good while
             scene.remove(e.obj);
             Wreck.remove(e.obj);
             enemies.splice(i, 1);

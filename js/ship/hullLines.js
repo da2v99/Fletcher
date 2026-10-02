@@ -225,7 +225,7 @@ function createHullInterior() {
             for (let j = 0; j < NT; j++) {
                 const t0 = 0.04 + 0.92 * j / NT, t1 = 0.04 + 0.92 * (j + 1) / NT;
                 const y0 = bot + (top - bot) * t0, y1 = bot + (top - bot) * t1;
-                const x0 = side * (sectionX(zs, t0) - 0.04), x1 = side * (sectionX(zs, t1) - 0.04);
+                const x0 = side * (sectionX(zs, t0) - 0.14), x1 = side * (sectionX(zs, t1) - 0.14);
                 const w = 0.28;   // the frame's web, standing in from the plating
                 quad([x0, y0, zs], [x1, y1, zs], [x1 - side * w, y1, zs], [x0 - side * w, y0, zs]);
             }
@@ -237,14 +237,14 @@ function createHullInterior() {
         for (let j = 0; j < NT; j++) {
             const t0 = j / NT, t1 = (j + 1) / NT;
             const y0 = bot + (top - bot) * t0, y1 = bot + (top - bot) * t1;
-            const w0 = hullX(zs, y0) - 0.05, w1 = hullX(zs, y1) - 0.05;
+            const w0 = hullX(zs, y0) - 0.15, w1 = hullX(zs, y1) - 0.15;
             quad([-w0, y0, zs], [w0, y0, zs], [w1, y1, zs], [-w1, y1, zs]);
         }
     });
     // Platform deck
     const yp = 0.9;
     for (let zs = -46; zs < 48; zs += 2) {
-        const w0 = hullX(zs, yp) - 0.05, w1 = hullX(zs + 2, yp) - 0.05;
+        const w0 = hullX(zs, yp) - 0.15, w1 = hullX(zs + 2, yp) - 0.15;
         quad([-w0, yp, zs], [w0, yp, zs], [w1, yp, zs + 2], [-w1, yp, zs + 2]);
     }
     const g = new THREE.BufferGeometry();

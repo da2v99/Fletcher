@@ -13,7 +13,7 @@ const Underwater = (() => {
     let snow = null, snowPos = null, fishBody = null, fishTail = null;
     const SNOW_N = 1400, SNOW_R = 14;
     const fish = [];
-    const FISH_N = 70, BIG_N = 4;
+    const FISH_N = 180, BIG_N = 7, SCHOOLS = 6;
     const _m = new THREE.Matrix4(), _t = new THREE.Matrix4(), _r = new THREE.Matrix4(), _v = new THREE.Vector3(), _c = new THREE.Vector3(),
         _a = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0), _s = new THREE.Vector3();
 
@@ -39,20 +39,23 @@ const Underwater = (() => {
         const tail = new THREE.BufferGeometry();
         tail.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0, 0.17, -0.28, 0, -0.17, -0.28, 0, 0, 0, 0, -0.17, -0.28, 0, 0.17, -0.28], 3));
         tail.computeVertexNormals();
-        const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.35, metalness: 0.55, emissive: 0x0c1a1e });   // a faint glint in the dark
+        const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.35, metalness: 0.55, emissive: 0x1c2e34 });   // silver sides catching what light there is
         fishBody = new THREE.InstancedMesh(body, mat, FISH_N);
         fishTail = new THREE.InstancedMesh(tail, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5, metalness: 0.3, side: THREE.DoubleSide }), FISH_N);
         [fishBody, fishTail].forEach(m => { m.frustumCulled = false; m.visible = false; m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); scene.add(m); });
         const silver = [new THREE.Color(0x9fb4c0), new THREE.Color(0x7f98a8), new THREE.Color(0xb8c6a0), new THREE.Color(0xc9b77a)];
+        // Schools: each holds its own station along the wreck and depth, its fish swimming round it together
+        const schools = Array.from({ length: SCHOOLS }, () => ({ oy: rnd(-3, 9), oz: rnd(-0.42, 0.42), r: rnd(5, 11), w: (Math.random() < 0.5 ? 1 : -1) * rnd(0.15, 0.3) }));
         for (let i = 0; i < FISH_N; i++) {
-            const big = i < BIG_N;
+            const big = i < BIG_N, sc = schools[i % SCHOOLS];
             const c = big ? new THREE.Color(0x4a5560) : silver[Math.floor(Math.random() * silver.length)];
             fishBody.setColorAt(i, c);
             fishTail.setColorAt(i, c);
             fish.push({
                 pos: new THREE.Vector3(), vel: new THREE.Vector3(), big, scale: big ? rnd(5.5, 8) : rnd(0.8, 1.4),
-                th: Math.random() * Math.PI * 2, w: (Math.random() < 0.5 ? 1 : -1) * (big ? rnd(0.04, 0.07) : rnd(0.12, 0.3)),
-                r: big ? rnd(14, 24) : rnd(7.5, 15), oy: rnd(-4, 10), oz: rnd(-0.45, 0.45), ph: Math.random() * 10, wag: Math.random() * 10,
+                th: big ? Math.random() * Math.PI * 2 : (i % SCHOOLS) * 1.1 + randn() * 0.35, w: big ? (Math.random() < 0.5 ? 1 : -1) * rnd(0.04, 0.07) : sc.w * rnd(0.92, 1.08),
+                r: big ? rnd(10, 18) : sc.r + randn() * 1.2, oy: big ? rnd(-3, 8) : sc.oy + randn() * 0.8, oz: big ? rnd(-0.45, 0.45) : sc.oz + randn() * 0.02,
+                ph: Math.random() * 10, wag: Math.random() * 10,
                 speed: big ? rnd(1.2, 2) : rnd(1.8, 3.2), placed: false
             });
         }
@@ -60,7 +63,7 @@ const Underwater = (() => {
 
     function scatter(center) {
         fish.forEach(f => {
-            const a = Math.random() * Math.PI * 2, d = rnd(45, 80);
+            const a = Math.random() * Math.PI * 2, d = rnd(20, 40);
             f.pos.set(center.x + Math.cos(a) * d, center.y + rnd(-6, 6), center.z + Math.sin(a) * d);
             f.vel.set(0, 0, 0);
             f.placed = true;
@@ -72,7 +75,7 @@ const Underwater = (() => {
         const deck = myShip.localToWorld(_v.set(0, sheerY(0), 0)).y;
         const wreck = deck < waterHeight(phys.pos.x, phys.pos.z, t) - 2;
         st.shipUnderT = wreck ? st.shipUnderT + dt : 0;
-        const interest = wreck ? smooth(4, 60, st.shipUnderT) : 0;
+        const interest = wreck ? smooth(1, 18, st.shipUnderT) : 0;
         if (!fish[0].placed) scatter(wreck ? phys.pos : camera.position);
         const cam = camera.position;
         for (let i = 0; i < FISH_N; i++) {
@@ -80,7 +83,7 @@ const Underwater = (() => {
             f.th += f.w * dt;
             let tx, ty, tz;
             if (wreck) {
-                const r = lerp(55, f.r, interest);
+                const r = lerp(28, f.r, interest);
                 const along = myShip.localToWorld(_c.set(0, f.oy * 0.5 + 2, f.oz * SHIP_LENGTH));
                 tx = along.x + Math.cos(f.th) * r; ty = along.y + Math.sin(f.th * 0.7 + f.ph) * 2; tz = along.z + Math.sin(f.th) * r;
             } else {
@@ -161,7 +164,6 @@ const Underwater = (() => {
         rain.lines.visible = !on;
         snow.visible = on;
         fishBody.visible = fishTail.visible = on;
-        ocean.material.side = on ? THREE.DoubleSide : THREE.FrontSide;
         UNDER_U.uUnder.value = on ? 1 : 0;
         if (!on) {
             scene.fog.color.copy(base.fog);
@@ -177,7 +179,12 @@ const Underwater = (() => {
         const c = camera.position;
         const wh = waterVisible() ? waterHeight(c.x, c.z, t) : -1e9;
         st.depth = wh - c.y;
-        const want = st.depth > (st.under ? -0.05 : 0.1);
+        // Under the very surface you see: the same wave maths as the sea's mesh (waterHeight), a hair of hysteresis
+        const want = st.depth > (st.under ? -0.02 : 0.02);
+        // Near the surface the sea is drawn from both sides, so a camera dipping under a crest sees the water's
+        // underside, never the sky through it
+        ocean.material.side = st.depth > -1.5 ? THREE.DoubleSide : THREE.FrontSide;
+        UNDER_U.uUnderDens.value = st.under ? UNDER_U.uUnderDens.value : 0.05;
         if (!st.under) {   // remember the surface settings to put back
             base.sun = sunLight.intensity; base.amb = ambLight.intensity;
             base.fog.copy(scene.fog.color); base.dens = scene.fog.density;

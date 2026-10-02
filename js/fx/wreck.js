@@ -35,7 +35,31 @@ const Wreck = (() => {
         uniform mat4 uWreckMat;
         uniform mat4 uWreckInv;
         uniform vec4 uBend;      // kink z, angle, pivot y, transition half-length
+        uniform vec4 uBlast[4];  // recent blasts: ship-local position, strength (m)
+        uniform vec4 uBlastAge;  // their ages (s)
+        uniform vec4 uWhip;      // hull-girder whipping: amplitude (m), age (s), angular frequency, length
+        uniform float uWobbleOn;
         varying vec3 vWreckLocal;
+        // A blast's pressure wave running out through the structure: a ripple of the plating that races along the
+        // hull and dies away, and for big underwater blows the whole hull girder whipping up and down
+        vec3 wreckWobble(vec3 p) {
+            vec3 off = vec3(0.0);
+            for (int i = 0; i < 4; i++) {
+                vec4 b = uBlast[i];
+                float age = uBlastAge[i];
+                if (b.w <= 0.0 || age < 0.0 || age > 2.5) continue;
+                vec3 d = p - b.xyz;
+                float r = length(d);
+                float front = age * 75.0;
+                float env = exp(-age * 2.4) * smoothstep(front + 3.0, front - 3.0, r) / (1.0 + r * 0.06);
+                off += (d / max(r, 0.3)) * b.w * env * sin(r * 1.1 - age * 48.0);
+            }
+            if (uWhip.x > 0.0 && uWhip.y < 7.0) {
+                float z = p.z / uWhip.w;
+                off.y += uWhip.x * cos(6.2831853 * z) * sin(uWhip.y * uWhip.z) * exp(-uWhip.y * 0.55);
+            }
+            return off;
+        }
         vec3 wreckBend(vec3 p) {
             float t = smoothstep(-uBend.w, uBend.w, p.z - uBend.x);
             vec3 q = p - vec3(0.0, uBend.z, uBend.x);
@@ -53,8 +77,11 @@ const Wreck = (() => {
             wkp = modelMatrix * wkp;
             vec3 wkl = (uWreckInv * wkp).xyz;
             vWreckLocal = wkl;
-            if (uBend.y != 0.0) {
-                mvPosition = viewMatrix * (uWreckMat * vec4(wreckBend(wkl), 1.0));
+            if (uBend.y != 0.0 || uWobbleOn > 0.0) {
+                vec3 wkb = wkl;
+                if (uWobbleOn > 0.0) wkb += wreckWobble(wkl);
+                if (uBend.y != 0.0) wkb = wreckBend(wkb);
+                mvPosition = viewMatrix * (uWreckMat * vec4(wkb, 1.0));
                 gl_Position = projectionMatrix * mvPosition;
             }
         }`;
@@ -66,11 +93,13 @@ const Wreck = (() => {
         float wreckScorch;` + NOISE;
     const FRAG_MAIN = () => `
         wreckScorch = 0.0;
+        float wkNear = 99.0;   // distance to the nearest hole, in its radii
         for (int i = 0; i < ${holesCap()}; i++) {
             vec4 h = uHoles[i];
             if (h.w <= 0.0) break;
             vec3 d = vWreckLocal - h.xyz;
             float dist = length(d);
+            wkNear = min(wkNear, dist / h.w);
             if (dist > h.w * 3.0) continue;
             float r = h.w * (0.62 + 0.55 * wkNoise(vWreckLocal * (3.2 / h.w)) + 0.2 * wkNoise(vWreckLocal * (9.0 / h.w)));
             if (dist < r) discard;
@@ -80,7 +109,11 @@ const Wreck = (() => {
             float e = (vWreckLocal.z - uCut.x) * uCut.y + (wkNoise(vWreckLocal * 0.55) - 0.5) * 3.2 + (wkNoise(vWreckLocal * 2.7) - 0.5) * 0.9;
             if (e < 0.0) discard;
             wreckScorch = max(wreckScorch, 1.0 - smoothstep(0.0, 2.2, e));
-        }`;
+            if (e < 5.0) wkNear = 0.0;
+        }
+        #ifdef WRECK_INTERIOR
+            if (wkNear > 7.0) discard;   // the inside of the hull only shows where it's been opened up
+        #endif`;
     const FRAG_COLOR = `
         diffuseColor.rgb *= 1.0 - 0.82 * wreckScorch;
         // The inside of the hull, seen through a hole: which face is the inside is read from the mesh's own winding
@@ -98,7 +131,9 @@ const Wreck = (() => {
             uWreckMat: { value: new THREE.Matrix4() }, uWreckInv: { value: new THREE.Matrix4() },
             uHoles: { value: Array.from({ length: holesCap() }, () => new THREE.Vector4(0, 0, 0, 0)) },
             uHullDim: { value: new THREE.Vector4(6, 4.5, 0.5, 0) },
-            uCut: { value: new THREE.Vector2(0, 0) }, uBend: { value: new THREE.Vector4(0, 0, 0, 4) }
+            uCut: { value: new THREE.Vector2(0, 0) }, uBend: { value: new THREE.Vector4(0, 0, 0, 4) },
+            uBlast: { value: Array.from({ length: 4 }, () => new THREE.Vector4(0, 0, 0, 0)) }, uBlastAge: { value: new THREE.Vector4(-1, -1, -1, -1) },
+            uWhip: { value: new THREE.Vector4(0, 99, 9, 115) }, uWobbleOn: { value: 0 }
         };
     }
 
@@ -106,7 +141,7 @@ const Wreck = (() => {
         mat.onBeforeCompile = function (sh, r) {
             if (base.prev) base.prev.call(this, sh, r);
             Object.assign(sh.uniforms, U);
-            const def = base.inner ? `#define WRECK_INNER ${base.inner}\n` : '';
+            const def = (base.inner ? `#define WRECK_INNER ${base.inner}\n` : '') + (base.interior ? '#define WRECK_INTERIOR\n' : '');
             sh.vertexShader = def + sh.vertexShader
                 .replace('#include <common>', '#include <common>\n' + VERT_DECL)
                 .replace('#include <project_vertex>', '#include <project_vertex>\n' + VERT_BODY);
@@ -115,7 +150,7 @@ const Wreck = (() => {
                 .replace('void main() {', 'void main() {\n' + FRAG_MAIN())
                 .replace('#include <color_fragment>', '#include <color_fragment>\n' + FRAG_COLOR);
         };
-        mat.customProgramCacheKey = () => base.key0 + '|wreck' + (base.inner || '');
+        mat.customProgramCacheKey = () => base.key0 + '|wreck' + (base.inner || '') + (base.interior ? 'I' : '');
         mat.needsUpdate = true;
         inject.set(mat, base);
         return mat;
@@ -173,12 +208,16 @@ const Wreck = (() => {
             maxTilt: opts.maxTilt || 0.55, deckY: opts.deckY || (() => 4.5), bullets: new Map()
         };
         U.uHullDim.value.set(W.beam / 2, opts.halfDepth || 4.6, opts.midY || 0.5, 0);
+        U.uWhip.value.set(0, 99, 2 * Math.PI * (W.len > 90 ? 1.4 : 2), W.len);
         W.onHole = opts.onHole || null;
         W.petals = [];
         if (opts.interior) {   // frames, bulkheads and a flat inside the hull, seen through the holes
             const g = opts.interior();
-            const im = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: 0x3a3632, roughness: 0.95, metalness: 0.2, side: THREE.DoubleSide, flatShading: true }));
+            const imat = new THREE.MeshStandardMaterial({ color: 0x3a3632, roughness: 0.95, metalness: 0.2, side: THREE.DoubleSide, flatShading: true });
+            inject.set(imat, { prev: imat.onBeforeCompile, key0: imat.customProgramCacheKey(), inner: 0, interior: true });
+            const im = new THREE.Mesh(g, imat);
             im.name = 'interior';
+            im.castShadow = false;
             root.add(im);
         }
         rematerial(root, U, !!opts.ownMaterials, opts.inner || (() => false), [W.beam / 2, opts.halfDepth || 4.6, opts.midY || 0.5]);
@@ -395,49 +434,50 @@ const Wreck = (() => {
         });
     }
 
-    // Torn plate peeled back round a big hole: jagged petals of steel curling out from the rim, painted on one side,
-    // scorched and rusty on the other
+    // Torn plate round a hole: a few shards (not a ring of them) of uneven size, mostly to one side, peeled up and
+    // back from the rim over the plating outside the hole, curling more toward ragged, twisted tips. Painted grey,
+    // scorched at the root, bare steel at the torn edges.
     let petalMat = null;
     const _t1 = new THREE.Vector3(), _t2 = new THREE.Vector3(), _pc = new THREE.Vector3();
     function petals(W, root, local, normal, r, outward) {
-        if (!petalMat) petalMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, metalness: 0.35, side: THREE.DoubleSide, flatShading: true });
+        if (!petalMat) petalMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.75, metalness: 0.4, side: THREE.DoubleSide, flatShading: true });
         _t1.set(Math.abs(normal.y) < 0.9 ? 0 : 1, Math.abs(normal.y) < 0.9 ? 1 : 0, 0).cross(normal).normalize();
         _t2.crossVectors(normal, _t1);
         const pos = [], col = [];
-        const P = (rad, ang, up) => _pc.copy(local).addScaledVector(_t1, Math.cos(ang) * rad).addScaledVector(_t2, Math.sin(ang) * rad).addScaledVector(normal, up).toArray();
-        const tri = (A, B, C, ca, cb, cc) => { pos.push(...A, ...B, ...C); col.push(...ca, ...cb, ...cc); };
-        // Each petal is a strip of plate in three segments, curling more the further it reaches (in through a shell
-        // hole, out of a burst), twisting as it goes, narrowing to a ragged tip
-        const n = 6 + Math.floor(Math.random() * 7), side = outward ? 1 : -1;
-        const paint = [0.42, 0.44, 0.46], soot = [0.07, 0.065, 0.06], rust = [0.33, 0.2, 0.14], bare = [0.55, 0.55, 0.54];
-        const rad = new THREE.Vector3(), tan = new THREE.Vector3(), dir = new THREE.Vector3(), q = new THREE.Quaternion();
+        const tri = (A, B, C, ca, cb, cc) => { pos.push(A.x, A.y, A.z, B.x, B.y, B.z, C.x, C.y, C.z); col.push(...ca, ...cb, ...cc); };
+        const paint = [0.43, 0.45, 0.47], soot = [0.08, 0.075, 0.07], bare = [0.6, 0.6, 0.58], burnt = [0.25, 0.2, 0.17];
+        const n = outward ? 2 + Math.floor(Math.random() * 5) : 1 + Math.floor(Math.random() * 3);
+        const bias = Math.random() * Math.PI * 2;
+        const rad = new THREE.Vector3(), tan = new THREE.Vector3(), dir = new THREE.Vector3(), c = new THREE.Vector3(), q = new THREE.Quaternion();
         for (let i = 0; i < n; i++) {
-            const am = (i + rnd(0.2, 0.8)) / n * Math.PI * 2, halfW = r * Math.PI / n * rnd(0.35, 0.6);
-            const L = r * rnd(0.45, 1.3), bend = rnd(0.6, 2.2), twist = randn() * 0.5, S = 3;
+            const am = bias + randn() * 1.1;
             rad.copy(_t1).multiplyScalar(Math.cos(am)).addScaledVector(_t2, Math.sin(am));
             tan.crossVectors(normal, rad);
-            let c = _pc.copy(local).addScaledVector(rad, r * rnd(0.82, 0.98));
-            let prevL = null, prevR = null;
-            const tint = Math.random() < 0.6 ? paint : rust;
+            const L = r * rnd(0.4, 1.5) * (outward ? 1 : 0.6);
+            const w0 = r * rnd(0.22, 0.6);
+            const lift = outward ? rnd(0.3, 1.25) : rnd(0.08, 0.5);   // how far it's peeled up off the plate
+            const twist = randn() * 0.6, wander = randn() * 0.3, S = 4;
+            c.copy(local).addScaledVector(rad, r * rnd(0.72, 0.98)).addScaledVector(normal, 0.02);
+            let pL = null, pR = null, pc = null;
             for (let k = 0; k <= S; k++) {
-                const f = k / S, wf = halfW * (1 - 0.85 * f) * rnd(0.8, 1.2);
+                const f = k / S;
+                // Ragged: each side of the strip narrows on its own, with bites out of it
+                const wl = w0 * (1 - 0.8 * f) * rnd(0.45, 1.15), wr = w0 * (1 - 0.8 * f) * rnd(0.45, 1.15);
                 q.setFromAxisAngle(rad, twist * f);
                 const tw = _w.copy(tan).applyQuaternion(q);
-                const Lp = c.clone().addScaledVector(tw, wf), Rp = c.clone().addScaledVector(tw, -wf);
-                const ck = f < 0.34 ? soot : f < 0.7 ? tint : (Math.random() < 0.5 ? rust : bare);
-                if (prevL) {
-                    tri(prevL.toArray(), prevR.toArray(), Rp.toArray(), prevL.col, prevL.col, ck);
-                    tri(prevL.toArray(), Rp.toArray(), Lp.toArray(), prevL.col, ck, ck);
+                const Lp = c.clone().addScaledVector(tw, wl), Rp = c.clone().addScaledVector(tw, -wr);
+                const ck = k === 0 ? soot : f < 0.5 ? (Math.random() < 0.4 ? burnt : paint) : (Math.random() < 0.5 ? paint : bare);
+                if (pL) {
+                    tri(pL, pR, Rp, pc, pc, ck);
+                    tri(pL, Rp, Lp, pc, ck, ck);
                 }
-                Lp.col = Rp.col = ck;
-                prevL = Lp; prevR = Rp;
-                // Next segment: back across the hole and curling out of the plate
-                const phi = bend * (f + 1 / S) * 0.75;
-                dir.copy(rad).multiplyScalar(-Math.cos(phi)).addScaledVector(normal, side * Math.sin(phi)).addScaledVector(tan, randn() * 0.15).normalize();
-                c = c.clone().addScaledVector(dir, L / S);
+                pL = Lp; pR = Rp; pc = ck;
+                // On out over the plate, lifting and curling more toward the tip, wandering sideways
+                const phi = lift * (0.35 + 0.9 * f);
+                dir.copy(rad).multiplyScalar(Math.cos(phi)).addScaledVector(normal, Math.sin(phi)).addScaledVector(tan, wander * (0.5 + f)).normalize();
+                c.addScaledVector(dir, L / S);
             }
-            // Ragged tip
-            tri(prevL.toArray(), prevR.toArray(), c.clone().addScaledVector(dir, L * rnd(0.05, 0.25)).toArray(), prevL.col, prevL.col, rust);
+            tri(pL, pR, c.clone().addScaledVector(dir, L * rnd(0.05, 0.3)).addScaledVector(tan, randn() * 0.1 * r), pc, pc, bare);
         }
         const g = new THREE.BufferGeometry();
         g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
@@ -467,6 +507,7 @@ const Wreck = (() => {
         if (upper && Math.random() < 0.6) addHole(W, _v.copy(local).addScaledVector(normal, -r * 1.1).add(_w.set(randn(), randn() * 0.6, randn()).multiplyScalar(0.5 * r)), r * rnd(0.6, 0.9));
         if (power >= 2 && Math.random() < 0.7) addHole(W, _v.copy(local).addScaledVector(normal, -0.6).add(_w.set(randn(), randn() * 0.5, randn()).multiplyScalar(0.8 * k)), 0.7 * k);
         dent(W, local, normal, 2.2 + 1.8 * k, (upper ? 0.5 : 0.32) * power, r, outward);
+        shake(root, local, 0.05 * Math.pow(power, 0.9), power >= 3 ? 0.06 * power : 0);
         petals(W, W.broken && local.z < W.cutZ ? W.half.root : W.root, local, normal, r, outward);
         // The keel girder: hits low and amidships do the most harm to her back
         const mid = 1 - Math.min(1, Math.abs(local.z) / (W.len * 0.45));
@@ -535,9 +576,37 @@ const Wreck = (() => {
         place(root, -th, gap);
     }
 
+    // A blast against the ship: the pressure wave ripples out through her structure; whip: amplitude (m) of the
+    // whole hull girder flexing, for big underwater blows
+    function shake(root, local, strength, whip = 0) {
+        const W = root.userData.wreck;
+        if (!W) return;
+        const i = (W.blastN = (W.blastN || 0) + 1) % 4;
+        W.blastT = W.blastT || [-99, -99, -99, -99];
+        W.blastT[i] = simTime;
+        W.U.uBlast.value[i].set(local.x, local.y, local.z, strength);
+        if (whip > 0) {
+            const age = simTime - (W.whipT || -99), cur = W.U.uWhip.value.x * Math.exp(-age * 0.55);
+            if (whip > cur) { W.whipT = simTime; W.U.uWhip.value.x = whip; }
+        }
+    }
+
     function update() {
         rayBudget = 8;   // bullet-hole ray casts per frame
         tracked.forEach(W => {
+            if (W.blastT) {
+                const U = W.U, a = U.uBlastAge.value;
+                a.set(simTime - W.blastT[0], simTime - W.blastT[1], simTime - W.blastT[2], simTime - W.blastT[3]);
+                U.uWhip.value.y = simTime - (W.whipT || -99);
+                U.uWobbleOn.value = Math.min(a.x, a.y, a.z, a.w) < 2.5 || U.uWhip.value.y < 7 ? 1 : 0;
+                if (W.half) {
+                    const H = W.half.U;
+                    H.uBlastAge.value.copy(a);
+                    H.uBlast.value.forEach((v, k) => v.copy(U.uBlast.value[k]));
+                    H.uWhip.value.copy(U.uWhip.value);
+                    H.uWobbleOn.value = U.uWobbleOn.value;
+                }
+            }
             if (!W.root.parent) { tracked.delete(W); if (W.half && W.half.root.parent) W.half.root.parent.remove(W.half.root); return; }
             W.root.updateMatrixWorld(true);
             W.U.uWreckMat.value.copy(W.root.matrixWorld);
@@ -577,5 +646,5 @@ const Wreck = (() => {
         tracked.add(W);
     }
 
-    return { attach, hit, surfaceHit, bullet, breakApart, pose, update, remove, repair, get: root => root.userData.wreck };
+    return { attach, hit, shake, surfaceHit, bullet, breakApart, pose, update, remove, repair, get: root => root.userData.wreck };
 })();

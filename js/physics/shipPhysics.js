@@ -164,12 +164,26 @@ function resetPhysics() {
     phys.flood = 0;
     phys.floodPoint.set(0, -2, 0);
     phys.engine = 1;
+    phys.sunk = null;
     Object.assign(drive, { order: STOP_IDX, thrust: 0, rudder: 0, left: false, right: false, cmd: null });
 }
 
 function stepPhysics(dt, t) {
+    if (phys.sunk) { sunkStep(dt); return; }
     // Light hulls ring fast (natural frequency ~ 1/sqrt(s)): sub-step so the integration stays accurate
     const s = hullScale();
+    // Gone under for good (her deck a few metres down): the seakeeping model has nothing left to do. From here
+    // she sinks steadily, her way coming off, settling to a resting list and trim, and lies still on the bottom.
+    if (typeof playerDmg !== 'undefined' && playerDmg.sinking) {
+        const deck = _r.set(0, sheerY(0), 0).applyQuaternion(phys.quat).add(phys.pos);
+        if (deck.y < waterHeight(deck.x, deck.z, t) - 3) {
+            const e = new THREE.Euler().setFromQuaternion(phys.tiltQ, 'YXZ');
+            const roll = Math.sign(e.z || 1) * THREE.MathUtils.clamp(Math.abs(e.z) * 0.8 + 0.1, 0.12, 0.45);
+            phys.sunk = { down: false, rest: new THREE.Quaternion().setFromEuler(new THREE.Euler(THREE.MathUtils.clamp(e.x, -0.18, 0.18), 0, roll, 'YXZ')) };
+            sunkStep(dt);
+            return;
+        }
+    }
     if (phys.fresh) {
         phys.fresh = false;
         const h0 = seaPatchHeight(phys.pos.x, phys.pos.z, t, 0, 1, 20 * s, 4 * s, phys.Teff * s * 0.5);
@@ -182,6 +196,35 @@ function stepPhysics(dt, t) {
     capsizeAssist(dt);
     groundShip(dt);
     settleOnBottom(dt);
+}
+
+// Sinking for good: way coming off, a steady ~3.5 m/s descent, the attitude easing to where she'll rest, and on
+// the bottom: still, in a cloud of silt
+function sunkStep(dt) {
+    const S = phys.sunk, s = hullScale();
+    const bed = Math.max(typeof Islands !== 'undefined' ? Islands.groundAt(phys.pos.x, phys.pos.z) : -1000, -SEABED_DEPTH);
+    phys.yawRate = 0;
+    phys.tiltW.set(0, 0, 0);
+    phys.angVel.set(0, 0, 0);
+    if (!S.down) {
+        const f = Math.exp(-dt * 0.35);
+        phys.vel.x *= f; phys.vel.z *= f;
+        phys.vel.y += (-3.5 - phys.vel.y) * Math.min(1, dt * 0.6);
+        phys.pos.addScaledVector(phys.vel, dt);
+        if (phys.pos.y + (KEEL_Y - 2) * s <= bed) {
+            phys.pos.y = bed - (KEEL_Y - 2) * s;
+            phys.vel.set(0, 0, 0);
+            S.down = true;
+            if (typeof smokeFx !== 'undefined') for (let i = 0; i < 70; i++) {
+                const p = _r.set(rnd(-7, 7), 0, rnd(-55, 55)).applyQuaternion(phys.quat).add(phys.pos);
+                smokeFx.emit({ x: p.x, y: bed + rnd(0, 2), z: p.z, vx: randn() * 2, vy: rnd(0.2, 1.2), vz: randn() * 2, life: rnd(12, 25), s0: rnd(3, 6), s1: rnd(14, 26),
+                    r: 0.18, g: 0.2, b: 0.17, a: 0.5, drag: 0.6, grav: -0.02 });
+            }
+            if (typeof playBoom === 'function') playBoom(phys.pos, 0.8, 120, 4);
+        }
+    }
+    phys.tiltQ.slerp(S.rest, Math.min(1, dt * (S.down ? 0.9 : 0.06)));
+    phys.quat.setFromAxisAngle(_yAxis, phys.heading).multiply(phys.tiltQ);
 }
 
 // A ship that goes down comes to rest on the bottom (70 m out in the Slot's shallower stretches, for the

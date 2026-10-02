@@ -49,7 +49,7 @@ function drawRadar(dt) {
         return s1 >= s0 ? a > s0 && a <= s1 : a > s0 || a <= s1;
     };
     enemies.forEach(e => {
-        if (e.island) return;   // small craft under the land's clutter
+        if (e.island || e.onBottom) return;   // small craft under the land's clutter; wrecks on the bottom
         const dx = e.x - phys.pos.x, dz = e.z - phys.pos.z, d = Math.hypot(dx, dz);
         if (d > radar.range) return;
         const rel = (-(Math.atan2(dx, dz) - hdg) % (Math.PI * 2) + Math.PI * 4) % (Math.PI * 2);

@@ -93,7 +93,9 @@ island and you wade ashore. In the boat: **W / S** row, **A / D** turn, **Shift*
 
 When she goes down you play on: you're on your feet wherever you were (on the bridge, beside your gun, or on
 deck), the whaleboat is put in the water, and there's no game-over screen (Esc has the menu and Restart). Stay
-aboard and you go down with her: the light fails as you sink, the murk closes in, air pours out of the hull, she settles on the bottom
+aboard and you go down with her (her engines die as the engine rooms flood; once her deck is under she sinks
+steadily, easing to a resting list, and lies still on the bottom in a cloud of silt; enemy wrecks lie on the
+bottom too): the light fails as you sink, the murk closes in, air pours out of the hull, she settles on the bottom
 (70 m) and the fish come to look; **Space** lets go and you swim for the surface. Keyboard and mouse only.
 
 ## Destruction
@@ -106,8 +108,11 @@ aboard and you go down with her: the light fails as you sink, the murk closes in
   itself, its torn edge bent hard in (a shell punching through) or out (a burst inside thin plating). Flat panels
   are subdivided round the hit first so deckhouses, funnels and shields bend too. Strips of plate peel back from
   the bigger holes, curled and twisted, painted on one side and scorched and rusty on the other. Torpedoes and
-  bombs tear holes metres across.
-- **Inside:** through the holes you see the hull's frames, bulkheads and platform deck.
+  bombs tear holes metres across. A few uneven shards of torn plate peel up and back from a hole's rim over the
+  plating round it, curling and twisting toward ragged tips.
+- **Pressure waves:** every blast ripples out through the structure (the plating visibly shudders, the wave racing
+  along the hull), near misses make her shiver, and torpedoes and bombs set the whole hull girder whipping.
+- **Inside:** through the holes (and only there) you see the hull's frames, bulkheads and platform deck.
 - **Wrecked fittings:** a hole torn through a 5" mount, a light AA mount, a torpedo mount or the Mk 37 director
   wrecks it for good: it stops dead, the barrels sag, it smokes and won't fire again (damage control can't fix
   it between engagements). Enemy mounts and launchers likewise.
