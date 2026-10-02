@@ -277,10 +277,14 @@ const Gfx = (() => {
     function render(dtMs, t) {
         if (lost) return;
         adapt(dtMs);
-        if (!post) { renderer.setRenderTarget(null); renderer.render(scene, camera); return; }
+        // The mirrored world for the sea first; it has already brought the scene's matrices up to date
+        const mirrored = WaterReflect.render(renderer, scene, camera, post ? Settings.gfx.renderScale * (Settings.gfx.dynamicRes ? dyn.scale : 1) : 1);
+        if (mirrored) scene.autoUpdate = false;
+        if (!post) { renderer.setRenderTarget(null); renderer.render(scene, camera); scene.autoUpdate = true; return; }
         const g = Settings.gfx, p = post;
         renderer.setRenderTarget(p.scene);
         renderer.render(scene, camera);
+        scene.autoUpdate = true;
 
         const pass = (m, target) => { p.quad.material = m; renderer.setRenderTarget(target); renderer.render(p.scn, p.cam); };
         const useBloom = g.bloom > 0.01;

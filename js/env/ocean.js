@@ -194,6 +194,9 @@ const UNDER_GLSL = `
 const OCEAN_SHADE_GLSL = `
     uniform samplerCube uSkyCube;
     uniform float uFogDensity;
+    uniform sampler2D uReflTex;
+    uniform mat4 uReflMat;
+    uniform float uReflOn;
     vec3 shadeSea(vec3 world, vec2 p0, vec3 N, float colorH, vec4 fw, float shore) {
         float dist = length(cameraPosition - world);
         float hNorm = clamp((colorH + uNormSpan * 0.5) / uNormSpan, 0.0, 1.0);
@@ -213,8 +216,17 @@ const OCEAN_SHADE_GLSL = `
         float fres = 0.02 + 0.98 * pow(1.0 - max(dot(N, V), 0.0), 5.0);
         vec3 R = reflect(-V, N);
         R.y = abs(R.y);
-        vec3 refl = textureCube(uSkyCube, R).rgb + vec3(0.75, 0.8, 1.0) * uFlash * 0.6;
-        col = mix(col, refl, fres * 0.55);
+        vec3 refl = textureCube(uSkyCube, R).rgb;
+        if (uReflOn > 0.5) {
+            // Planar reflection (reflect.js): the mirrored world, rippled by the wave normals; the sky cube
+            // fills in where the ripples reach past the edge of the mirrored view
+            vec4 rp = uReflMat * vec4(world, 1.0);
+            vec2 ruv = rp.xy / rp.w + N.xz * 0.05;
+            vec2 edge = smoothstep(0.0, 0.04, ruv) * smoothstep(1.0, 0.96, ruv);
+            refl = mix(refl, texture2D(uReflTex, clamp(ruv, 0.002, 0.998)).rgb, edge.x * edge.y);
+        }
+        refl += vec3(0.75, 0.8, 1.0) * uFlash * 0.6;
+        col = mix(col, refl, fres * mix(0.55, 0.78, uReflOn));
         vec3 Hs = normalize(L + V);
         float nh = max(dot(N, Hs), 0.0);
         col += uSunCol * (pow(nh, 700.0) * 1.6 + pow(nh, 80.0) * 0.1) * (1.0 - 0.85 * uStorm) * smoothstep(-0.02, 0.05, uSunDir.y);
@@ -369,7 +381,7 @@ function createOcean(skyCube, q = Settings.gfx.ocean) {
         uTrail: { value: trailU },
         uTrailOdo: { value: trailOdo },
         uIsland: { value: islandBlobU }
-    }, SEA_U, WEATHER_U, UNDER_U);
+    }, SEA_U, WEATHER_U, UNDER_U, REFL_U);
     const mat = new THREE.ShaderMaterial(Object.assign({ uniforms, extensions: { derivatives: true } }, oceanShaders(q)));
     const mesh = new THREE.Mesh(createOceanGeometry(q), mat);
     mesh.frustumCulled = false;
