@@ -31,7 +31,8 @@ binoculars. On an AA gun: drag (or tilt, with gyro aim on) to aim, hold FIRE, EX
 
 **Settings** (main or pause menu), saved in the browser:
 - *Graphics:* presets from Low (phones) to Cinematic, render resolution, dynamic resolution and target frame rate,
-  ocean, island, cloud and shadow detail, effects density, and the cinematic pass: bloom, light shafts, sun flare,
+  ocean, island, cloud and shadow detail, water reflections (off, half resolution, or "RTX" full resolution; on
+  by default in Ultra and Cinematic), effects density, and the cinematic pass: bloom, light shafts, sun flare,
   colour grade, vignette, film grain, 2.39:1 letterbox, FXAA or MSAA.
 - *Controls:* touch controls on/off, steering (slider, wheel or gyro tilt), gyro aim, sensitivities, left-handed
   layout, button size, vibration, AI gunners on the 40 mm / 20 mm, air raid frequency, telegraph bell.
@@ -129,10 +130,15 @@ bottom too): the light fails as you sink, the murk closes in, air pours out of t
   smoke. In the water, wood, drums, floats and anything with air trapped in it float for a minute or two: they sit
   at their own waterline, lie along the wave and drift downwind. Steel goes down after a moment, tumbling into the
   murk until it's lost from sight. Badly hurt warships can have a gun mount blown clean off.
-- **Splashes:** a 5" shell throws a ~90 m white column that keeps building, spreads, collapses in a curtain of
-  spray and leaves mist; 40 mm and 20 mm rounds throw ~30 m and ~20 m plumes, a torpedo ~150 m. No two are alike:
+- **Splashes:** a 5" shell throws a ~45 m white column that keeps building, spreads, collapses in a curtain of
+  spray and leaves mist; 40 mm and 20 mm rounds throw ~15 m and ~10 m plumes, a torpedo ~80 m. No two are alike:
   each has its own height, one to four jets, a lean with the wind and a lopsided crown, and every spray sprite has
   its own shape and rotation.
+- **Fire and smoke:** a blaze is licking flame tongues that swell, swirl and burn from white-hot through orange to
+  dull red, sparks and embers riding the updraft, and a thick column of smoke that comes off orange-lit, darkens
+  to black-grey, billows out and leans downwind, shaded light on top and dark underneath. The nearest fire throws
+  a flickering orange light over the deck and the water around it. All of it is pooled GPU points, so a ship
+  burning in several places costs next to nothing.
 
 ## Sound
 All synthesised. The 5"/38s boom; the 40 mm Bofors "pom" and the 20 mm Oerlikon bark have a crack, muzzle blast,
@@ -149,6 +155,17 @@ follows the same colours.
 Stars are individual points (about 14,000, with a Milky Way band and its dark rift) drawn at screen resolution,
 fading in after sunset, twinkling low down and hidden by cloud; the time slider now runs into full night
 (04:24-19:36). The cloud cube is sharper and its texels are filtered away.
+The volumetric clouds are lit physically: each sample marches toward the sun to find how much cloud shades it
+(Beer-Lambert), a two-lobe Henyey-Greenstein phase gives the bright silver lining round the sun, a softer
+multiple-scattering term keeps thick cloud glowing instead of going black, the "powder" effect darkens thin
+edges, and the ambient comes from the real sky above and the horizon below. So fair-weather cumulus have white
+sunlit tops and blue-grey bellies, sunset clouds have burning edges and dark cores, and storm decks go slate.
+
+## Water reflections
+With reflections on, the world is drawn a second time from the camera mirrored in the sea (an oblique clip plane
+keeps what's under water out of it) and the ocean samples that image instead of the sky alone, rippled by the
+waves' normals and weighted by Fresnel. Ships, islands, smoke, burning wrecks, flares and explosions all show in
+the water. "On" renders the mirror at half resolution; "RTX" at full resolution.
 
 ## Islands
 Volcanic jungle islands and low palm islets, generated from a fixed seed in 8 km sectors and streamed in around the
@@ -171,7 +188,7 @@ flight and drop, need a moment to get on, and can't fire into the ship), or take
 |---|---|
 | `core/` | Ship constants, math helpers, geometry helpers, saved settings and graphics presets |
 | `ship/` | The Fletcher model: hull lines, fittings, assembly |
-| `env/` | `sea.js` wave model (shared by GPU and CPU), `ocean.js` surface shader, `clouds.js` volumetric sky, `stars.js`, `underwater.js` (murk, fish), `weather.js`, `shipWaves.js` (Kelvin wake) |
+| `env/` | `sea.js` wave model (shared by GPU and CPU), `ocean.js` surface shader, `clouds.js` volumetric sky, `reflect.js` planar water reflections, `stars.js`, `underwater.js` (murk, fish), `weather.js`, `shipWaves.js` (Kelvin wake) |
 | `physics/` | Rigid-body buoyancy and handling, flooding |
 | `fx/` | Particles (spray, smoke, fire), debris and hull damage, tracers, synthesised audio, post-processing and the renderer |
 | `combat/` | Ballistics and shells, torpedoes, enemy ship models and AI, aircraft and air raids, our 5"/38s, torpedoes and AA battery, the AI captain, damage model |

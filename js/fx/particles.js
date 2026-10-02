@@ -1,7 +1,10 @@
 // Pooled GPU point particles (spray, smoke, fire) and the effect recipes built on them.
 // Particle fields: position / velocity, life, s0 -> s1 size, colour r g b (optionally fading to r1 g1 b1),
 // alpha a, drag, grav; optional: delay (s before it appears), fade (alpha fall-off power, default 2),
-// floor (a y it can't fall through: it stops there and fades out quickly, e.g. spray landing on the sea).
+// floor (a y it can't fall through: it stops there and fades out quickly, e.g. spray landing on the sea),
+// s2 (size swells to s1 by a third of its life, then tapers to s2: a tongue of flame), r2 g2 b2 (a third colour
+// after r1: white-hot, orange, dull red), turb (swirling turbulence, m/s²), wx wz (the drift it settles into,
+// e.g. downwind, instead of coming to rest).
 
 // Sprite textures: 'soft' round glow (fire), 'puff' lumpy cloud (smoke, mist), 'spray' grainy droplets (water).
 // Each is a 2 x 2 atlas of different random draws, and every particle picks one and a rotation of its own, so
@@ -73,7 +76,7 @@ function createParticleSystem(maxCount, blending, texture = 'soft') {
     const mat = new THREE.ShaderMaterial({
         // Fog: the scene's own colour object (shared, so it follows the weather and the view) and density
         uniforms: { map: { value: particleTexture(texture) }, scale: { value: 800 }, fogCol: { value: scene.fog.color }, fogDen: { value: 0 },
-            additive: { value: blending === THREE.AdditiveBlending ? 1 : 0 } },
+            additive: { value: blending === THREE.AdditiveBlending ? 1 : 0 }, shade: { value: texture === 'puff' ? 1 : 0 } },
         vertexShader: `
             attribute vec3 pcolor;
             attribute float psize;
@@ -100,6 +103,7 @@ function createParticleSystem(maxCount, blending, texture = 'soft') {
             uniform sampler2D map;
             uniform vec3 fogCol;
             uniform float additive;
+            uniform float shade;
             varying vec3 vC;
             varying float vA;
             varying float vFog;
@@ -112,7 +116,10 @@ function createParticleSystem(maxCount, blending, texture = 'soft') {
                 float a = texture2D(map, uv).a * vA;
                 if (additive > 0.5) a *= 1.0 - vFog;   // glows fade out; smoke and spray take on the haze
                 if (a < 0.003) discard;
-                gl_FragColor = vec4(additive > 0.5 ? vC : mix(vC, fogCol, vFog), a);
+                vec3 c = vC;
+                // Smoke is a lumpy volume, not a flat disc: lit on its upper side, in shadow underneath
+                if (shade > 0.5) c *= 0.7 + 0.55 * (1.0 - gl_PointCoord.y) * (0.6 + 0.4 * texture2D(map, uv * 0.5 + 0.25).a);
+                gl_FragColor = vec4(additive > 0.5 ? c : mix(c, fogCol, vFog), a);
             }
         `,
         transparent: true,
@@ -145,7 +152,15 @@ function createParticleSystem(maxCount, blending, texture = 'soft') {
                 if (p.age >= p.life) { list[i] = list[list.length - 1]; list.pop(); continue; }
                 if (p.age < 0) continue;
                 const damp = Math.exp(-p.drag * dt);
-                p.vx *= damp; p.vz *= damp; p.vy = p.vy * damp - p.grav * dt;
+                if (p.wx !== undefined) { p.vx = p.wx + (p.vx - p.wx) * damp; p.vz = p.wz + (p.vz - p.wz) * damp; }
+                else { p.vx *= damp; p.vz *= damp; }
+                p.vy = p.vy * damp - p.grav * dt;
+                if (p.turb) {
+                    const ph = p.v * 40, a = p.age;
+                    p.vx += Math.sin(a * 2.3 + ph) * p.turb * dt;
+                    p.vz += Math.cos(a * 1.9 + ph * 1.3) * p.turb * dt;
+                    p.vy += Math.sin(a * 3.1 + ph * 0.7) * p.turb * 0.4 * dt;
+                }
                 p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
                 if (p.floor !== undefined && p.y < p.floor && p.vy < 0) {
                     p.y = p.floor; p.vy = 0; p.vx *= 0.3; p.vz *= 0.3; p.grav = 0;
@@ -158,8 +173,13 @@ function createParticleSystem(maxCount, blending, texture = 'soft') {
                 const t = p.age / p.life;
                 pos[n * 3] = p.x; pos[n * 3 + 1] = p.y; pos[n * 3 + 2] = p.z;
                 if (p.r1 === undefined) { col[n * 3] = p.r; col[n * 3 + 1] = p.g; col[n * 3 + 2] = p.b; }
-                else { const c = Math.min(1, t * (p.cs || 1)); col[n * 3] = lerp(p.r, p.r1, c); col[n * 3 + 1] = lerp(p.g, p.g1, c); col[n * 3 + 2] = lerp(p.b, p.b1, c); }
-                size[n] = lerp(p.s0, p.s1, Math.sqrt(t));
+                else if (p.r2 === undefined) { const c = Math.min(1, t * (p.cs || 1)); col[n * 3] = lerp(p.r, p.r1, c); col[n * 3 + 1] = lerp(p.g, p.g1, c); col[n * 3 + 2] = lerp(p.b, p.b1, c); }
+                else {
+                    const c = Math.min(1, t * (p.cs || 1)) * 2;
+                    if (c < 1) { col[n * 3] = lerp(p.r, p.r1, c); col[n * 3 + 1] = lerp(p.g, p.g1, c); col[n * 3 + 2] = lerp(p.b, p.b1, c); }
+                    else { col[n * 3] = lerp(p.r1, p.r2, c - 1); col[n * 3 + 1] = lerp(p.g1, p.g2, c - 1); col[n * 3 + 2] = lerp(p.b1, p.b2, c - 1); }
+                }
+                size[n] = p.s2 === undefined ? lerp(p.s0, p.s1, Math.sqrt(t)) : t < 0.33 ? lerp(p.s0, p.s1, Math.sqrt(t / 0.33)) : lerp(p.s1, p.s2, (t - 0.33) / 0.67);
                 pvar[n] = p.v;
                 alpha[n] = p.a * Math.min(1, t * 12) * Math.pow(1 - t, p.fade || 2);
                 n++;
@@ -176,7 +196,8 @@ function createParticleSystem(maxCount, blending, texture = 'soft') {
     };
 }
 
-let smokeFx, fireFx, sprayFx, muzzleLight, blastLight;
+let smokeFx, fireFx, sprayFx, muzzleLight, blastLight, fireLight;
+const fireNear = { d: Infinity, p: new THREE.Vector3(), k: 0 };   // the blaze nearest the camera this frame
 const shockwaves = [];
 let shockGeo, shockMat;
 
@@ -187,7 +208,8 @@ function initEffects() {
     scene.add(smokeFx.points, sprayFx.points, fireFx.points);
     muzzleLight = new THREE.PointLight(0xffa655, 0, 90, 2);
     blastLight = new THREE.PointLight(0xff9a40, 0, 160, 2);
-    scene.add(muzzleLight, blastLight);
+    fireLight = new THREE.PointLight(0xff7a2e, 0, 45, 2);   // flickering light thrown by the nearest fire
+    scene.add(muzzleLight, blastLight, fireLight);
     shockGeo = new THREE.RingGeometry(0.82, 1, 48);
     shockGeo.rotateX(-Math.PI / 2);
     shockMat = new THREE.MeshBasicMaterial({ color: 0xfff1d8, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
@@ -199,6 +221,12 @@ function updateEffects(dt) {
     sprayFx.update(dt, pxScale);
     fireFx.update(dt, pxScale);
     muzzleLight.intensity = Math.max(0, muzzleLight.intensity - dt * 60);
+    if (fireNear.d < 260 * 260) {
+        fireLight.position.copy(fireNear.p).y += 2.5;
+        const fl = 0.75 + 0.25 * Math.sin(simTime * 23.0) * Math.sin(simTime * 7.3 + 1.1) + 0.1 * Math.random();
+        fireLight.intensity = 3.2 * fireNear.k * fl;
+    } else fireLight.intensity = 0;
+    fireNear.d = Infinity;
     blastLight.intensity = Math.max(0, blastLight.intensity - dt * 30);
     // Shock rings: a fast, fading ring racing out over the water from a blast
     for (let i = shockwaves.length - 1; i >= 0; i--) {
@@ -291,14 +319,14 @@ const FX = {
                 delay: rnd(0.6, 2.2), life: rnd(6, 12), s0: rnd(2, 3.5) * k, s1: rnd(5, 9) * k, r: 0.9, g: 0.95, b: 0.97, a: 0.5, fade: 1.2, drag: 0.6, grav: 0 });
         }
     },
-    // Shell splash: a 5" shell's column ~90 m (scale 2.6 is a torpedo, ~150 m). Always white water (tint kept
+    // Shell splash: a 5" shell's column ~45 m (scale 2.6 is a torpedo, ~80 m). Always white water (tint kept
     // for callers, not used)
     splash(x, y, z, tint = WHITE_SPRAY, scale = 1) {
-        FX.plume(x, y, z, Math.min(150, 93 * Math.pow(scale, 0.55)), 2.4 * Math.sqrt(scale), Math.sqrt(scale), scale);
+        FX.plume(x, y, z, Math.min(85, 46 * Math.pow(scale, 0.55)), 1.3 * Math.sqrt(scale), 0.62 * Math.sqrt(scale), scale);
     },
-    // 40 mm (big) or 20 mm round into the sea: tall, thin plumes, ~30 m and ~20 m
+    // 40 mm (big) or 20 mm round into the sea: thin plumes, ~15 m and ~10 m
     aaSplash(x, y, z, big) {
-        FX.plume(x, y, z, big ? rnd(27, 36) : rnd(17, 23), big ? 0.75 : 0.5, big ? 0.75 : 0.6, big ? 0.22 : 0.14);
+        FX.plume(x, y, z, big ? rnd(13, 18) : rnd(8.5, 11.5), big ? 0.42 : 0.3, big ? 0.48 : 0.38, big ? 0.2 : 0.13);
     },
     // Torpedo hit: a towering white column and a fireball
     waterColumn(p) {
@@ -364,11 +392,29 @@ const FX = {
             blastLight.intensity = 8 * scale;
         }
     },
+    // A fire burning (called many times a second per blaze): tongues of flame that swell and taper as they lick
+    // up, white-hot at the root through orange to dull red, swirling as they rise; embers spiralling up out of it;
+    // and a dense, oily column of smoke, lit orange from below at first, billowing and shearing off downwind
     burn(p, intensity) {
-        smokeFx.emit({ x: p.x + randn() * 2, y: p.y, z: p.z + randn() * 2, vx: 2.5 + randn(), vy: rnd(3, 7), vz: 1.2 + randn(),
-            life: rnd(6, 11), s0: rnd(3, 6), s1: rnd(20, 34), r: 0.14, g: 0.13, b: 0.13, a: 0.55 * intensity, drag: 0.3, grav: -0.3 });
-        if (Math.random() < 0.6 * intensity) fireFx.emit({ x: p.x + randn() * 1.5, y: p.y, z: p.z + randn() * 1.5, vx: randn(), vy: rnd(2, 6), vz: randn(),
-            life: rnd(0.3, 0.7), s0: rnd(2.5, 4.5), s1: rnd(4, 7), r: 1.0, g: 0.5, b: 0.15, a: 0.9, drag: 1, grav: -1 });
+        const k = intensity, wx = Sea.wind.x * 3, wz = Sea.wind.y * 3;
+        for (let i = 0; i < 2; i++) if (Math.random() < 0.75 * k) fireFx.emit({
+            x: p.x + randn() * 1.1, y: p.y + rnd(0, 0.5), z: p.z + randn() * 1.1,
+            vx: randn() * 0.5, vy: rnd(2.5, 6), vz: randn() * 0.5, wx: wx * 0.4, wz: wz * 0.4,
+            life: rnd(0.45, 0.95), s0: rnd(1.0, 2.0) * k, s1: rnd(3.2, 5.5) * k, s2: rnd(0.5, 1.1),
+            r: 1, g: 0.86, b: 0.55, r1: 1, g1: 0.45, b1: 0.09, r2: 0.6, g2: 0.1, b2: 0.02, cs: 1, a: 0.8, fade: 0.8, drag: 1.4, grav: -3.5, turb: 7 });
+        if (Math.random() < 0.3 * k) fireFx.emit({
+            x: p.x + randn(), y: p.y + rnd(0.5, 2), z: p.z + randn(), vx: randn() * 1.5, vy: rnd(4, 10), vz: randn() * 1.5, wx, wz,
+            life: rnd(1.5, 3.2), s0: rnd(0.18, 0.32), s1: 0.12, r: 1, g: 0.65, b: 0.25, r1: 0.9, g1: 0.22, b1: 0.03, a: 1, fade: 0.5, drag: 0.7, grav: -1.2, turb: 16 });
+        if (Math.random() < 0.8) {
+            const g = rnd(0.07, 0.13);
+            smokeFx.emit({ x: p.x + randn() * 1.4, y: p.y + rnd(0.8, 2.2), z: p.z + randn() * 1.4,
+                vx: randn() * 0.6, vy: rnd(3, 6), vz: randn() * 0.6, wx, wz,
+                life: rnd(8, 14), s0: rnd(2, 3.5), s1: rnd(17, 30), r: 0.45, g: 0.25, b: 0.12, r1: g, g1: g * 0.96, b1: g * 0.92, cs: 7,
+                a: 0.62 * Math.min(1, k + 0.3), fade: 1.4, drag: 0.35, grav: -0.22, turb: 1.4 });
+        }
+        // The nearest blaze to the camera lights its surroundings (one shared, flickering light)
+        const d = p.distanceToSquared(camera.position);
+        if (d < fireNear.d) { fireNear.d = Math.sqrt(d) < 260 ? d : Infinity; fireNear.p.copy(p); fireNear.k = Math.min(1.2, k); }
     },
     // Shell burst on land: a flash and short fireball, a fountain of earth and stones, and a brown-grey dust
     // cloud that billows up and drifts downwind. scale 1 = 5" HE; small values for 40 mm.

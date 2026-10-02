@@ -5,10 +5,10 @@
 // Lighter levels also refresh the cube more slowly and never render all six faces in one frame, which is
 // what trips phone GPU watchdogs.
 const CLOUD_Q = [
-    { size: 128, steps: 0, every: 8 },
-    { size: 192, steps: 40, every: 2 },
-    { size: 320, steps: 72, every: 1 },
-    { size: 448, steps: 110, every: 1 }
+    { size: 128, steps: 0, light: 0, every: 8 },
+    { size: 192, steps: 40, light: 2, every: 2 },
+    { size: 320, steps: 68, light: 3, every: 1 },
+    { size: 416, steps: 100, light: 4, every: 1 }
 ];
 
 const Clouds = (() => {
@@ -18,6 +18,7 @@ const Clouds = (() => {
     const cloudU = Object.assign({}, WEATHER_U, { uFlash: { value: 0 }, uCover: { value: 0.6 } });   // flashes are added live, not baked
 
     const fragment = () => `#define STEPS ${CLOUD_Q[q].steps}
+#define LSTEPS ${Math.max(1, CLOUD_Q[q].light)}
 ` + NOISE_GLSL + SKY_GLSL + `
         varying vec3 vDir;
         uniform float uCover;
@@ -45,6 +46,9 @@ const Clouds = (() => {
             return max(0.0, d);
         }
 
+        // Henyey-Greenstein phase, scaled so isotropic scattering is 1
+        float hg(float c, float g) { float g2 = g * g; return (1.0 - g2) / pow(1.0 + g2 - 2.0 * g * c, 1.5); }
+
         void main() {
             vec3 rd = normalize(vDir);
             vec3 sky = skyColor(rd);
@@ -65,35 +69,55 @@ const Clouds = (() => {
             gl_FragColor = vec4(mix(sky, cc, cov * 0.9), cov);
 #else
 
-            float dawn = 1.0 - smoothstep(0.05, 0.45, uSunDir.y);
-            float bright = mix(0.45, 1.0, smoothstep(-0.1, 0.3, uSunDir.y)) * (1.0 - 0.85 * nightF());
-            float sd = max(dot(rd, uSunDir), 0.0);
-            vec3 sunL = normalize(vec3(uSunDir.x, max(uSunDir.y, 0.05), uSunDir.z));
-            vec3 litCol = mix(vec3(1.0, 0.99, 0.97), uSunCol * vec3(1.0, 0.86, 0.8), dawn * 0.7) * bright * (1.0 - 0.45 * uStorm);
-            litCol += uSunCol * pow(sd, 6.0) * 0.4 * (1.0 - uStorm * 0.6);   // silver lining toward the sun
-            // Sunrise and sunset: tops lit orange and gold, undersides violet-grey
+            // Physically based single + multiple scattering, after the "protean clouds" lighting:
+            //  - sunlight reaching each sample is marched toward the sun at doubling steps (Beer-Lambert), so
+            //    clouds shade themselves and each other
+            //  - a dual-lobe Henyey-Greenstein phase: a strong forward lobe (the silver lining round the sun) and a
+            //    weak back lobe
+            //  - a second, softer octave for multiple scattering, so thick cloud glows instead of going black
+            //  - the "powder" darkening at thin edges facing the light
+            //  - ambient from the real sky above and the sea's bounce below, and energy-conserving integration
+            // The sun's own colour, the sunset tint, the storm and the night all come from the game's sky.
             float gold = goldenF() * (1.0 - uStorm * 0.6);
-            litCol = mix(litCol, vec3(1.0, 0.56, 0.30) * bright * 1.25 + uSunCol * pow(sd, 3.0) * 0.5, gold * 0.75);
-            vec3 shadowCol = mix(mix(vec3(0.24, 0.29, 0.38), vec3(0.36, 0.27, 0.45), gold * 0.8), vec3(0.10, 0.11, 0.13), uStorm) * bright;
+            vec3 sunL = normalize(vec3(uSunDir.x, max(uSunDir.y, 0.04), uSunDir.z));
+            float cosT = dot(rd, sunL);
+            float phase = min(mix(hg(cosT, 0.72), hg(cosT, -0.2), 0.4), 2.6);
+            float phaseMS = mix(hg(cosT, 0.35), hg(cosT, -0.1), 0.5);
+            vec3 sunC = uSunCol * (1.0 + 0.25 * gold) * smoothstep(-0.12, 0.05, uSunDir.y) * (1.0 - 0.8 * uStorm) * 1.25;
+            vec3 zen = skyColor(vec3(0.0, 1.0, 0.0));
+            vec3 skyUp = mix(vec3(dot(zen, vec3(0.3, 0.5, 0.2))), zen, 0.45) * 1.5 + 0.035 * (1.0 - nightF());   // sky light, scattered from every side so less blue
+            vec2 sh = normalize(sunL.xz + 1e-4);   // bounce from the whole horizon, not just the bright patch under the sun
+            vec3 skyLow = (skyColor(vec3(sh.x, 0.04, sh.y)) + skyColor(vec3(-sh.x, 0.04, -sh.y)) + skyColor(vec3(sh.y, 0.04, -sh.x)) + skyColor(vec3(-sh.y, 0.04, sh.x))) * 0.15 + 0.015;
+            const float EXT = 0.17, EXT_L = 1.6;
 
             vec3 ro = vec3(0.0, -1.0, 0.0);
-            vec4 rez = vec4(0.0);
+            float T = 1.0;
+            vec3 Lsum = vec3(0.0);
             float t = 1.0 + fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) * 0.5;
             float stride = 110.0 / float(STEPS);
             for (int i = 0; i < STEPS; i++) {
-                if (rez.a > 0.99 || t > 70.0) break;
+                if (T < 0.01 || t > 70.0) break;
                 vec3 pos = ro + t * rd;
                 float m = cloudMap(pos);
+                float dt = (0.05 + t * 0.025) * stride;
                 if (m > 0.01) {
-                    float den = smoothstep(0.0, 1.0, m);
-                    float dif = clamp((den - cloudMap(pos + sunL * 0.4)) / 0.8, 0.0, 1.0);
-                    vec3 c = mix(shadowCol, litCol, clamp(dif * 1.5 + 0.1, 0.0, 1.0));
-                    vec4 col = vec4(c, min(1.0, 0.08 * stride) * den * smoothstep(70.0, 35.0, t));
-                    col.rgb *= col.a;
-                    rez += col * (1.0 - rez.a);
+                    float den = smoothstep(0.0, 1.0, m) * smoothstep(70.0, 35.0, t);
+                    // Light march toward the sun
+                    float ld = 0.0, ls = 4.0 / (exp2(float(LSTEPS)) - 1.0);   // the same 4 units toward the sun at every quality
+                    vec3 lp = pos;
+                    for (int j = 0; j < LSTEPS; j++) { lp += sunL * ls; ld += cloudMap(lp) * ls; ls *= 2.0; }
+                    float beer = exp(-ld * EXT_L), beerMS = exp(-ld * EXT_L * 0.15);
+                    float powder = 1.0 - exp(-den * 3.0);
+                    vec3 amb = mix(skyLow, skyUp, smoothstep(1.0, 12.0, pos.y));
+                    vec3 S = sunC * (beer * phase * mix(1.0, powder * 1.7, 0.45) + beerMS * phaseMS * 0.4) + amb * (0.42 + 0.5 * powder);
+                    float stepT = exp(-den * EXT * dt / max(stride, 0.5) * 1.6);
+                    Lsum += S * (1.0 - stepT) * T;
+                    T *= stepT;
                 }
-                t += (0.05 + t * 0.025) * stride;
+                t += dt;
             }
+            Lsum = Lsum / (1.0 + 0.25 * Lsum);
+            vec4 rez = vec4(Lsum, 1.0 - T);
             // Aerial perspective: low clouds dissolve into the horizon haze
             float haze = (1.0 - smoothstep(0.0, 0.3, rd.y)) * 0.65 + (1.0 - smoothstep(0.0, 0.05, rd.y)) * 0.35;
             rez.rgb = mix(rez.rgb, sky * rez.a, haze);
