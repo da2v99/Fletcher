@@ -112,6 +112,9 @@ function updateFogColor() {
     skyColorJS(_fogDir.x, 0.015, _fogDir.z, scene.fog.color);
 }
 
+// Haze: thicker in a storm, thinner with a longer view distance (graphics settings)
+function fogDensityFor(storm) { return lerp(0.00011, 0.00032, storm) / (Settings.gfx.viewDist || 1); }
+
 function applyWeather() {
     const s = weather.storm;
     const el = 78 * DEG * Math.sin(Math.PI * (weather.hour - 6) / 12);
@@ -126,7 +129,7 @@ function applyWeather() {
     const sunCol = new THREE.Color(1, 0.97, 0.92).lerp(new THREE.Color(1, 0.58, 0.32), dawn).lerp(new THREE.Color(1, 0.36, 0.12), 1 - smooth(-0.02, 0.1, SUN_DIR.y));
     WEATHER_U.uSunCol.value.copy(sunCol);
     WEATHER_U.uStorm.value = s;
-    WEATHER_U.uFogDensity.value = lerp(0.00011, 0.00032, s);
+    WEATHER_U.uFogDensity.value = fogDensityFor(s);
 
     sunLight.color.copy(sunCol);
     sunLight.intensity = 1.6 * smooth(-0.02, 0.12, SUN_DIR.y) * (1 - 0.78 * s);

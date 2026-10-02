@@ -7,8 +7,8 @@
 const CLOUD_Q = [
     { size: 128, steps: 0, light: 0, every: 8 },
     { size: 192, steps: 40, light: 2, every: 2 },
-    { size: 320, steps: 68, light: 3, every: 1 },
-    { size: 416, steps: 100, light: 4, every: 1 }
+    { size: 384, steps: 68, light: 3, every: 1 },
+    { size: 576, steps: 92, light: 4, every: 2 }
 ];
 
 const Clouds = (() => {
@@ -27,9 +27,15 @@ const Clouds = (() => {
 
         float cloudMap(vec3 p) {
             float y = p.y;
-            p.xz *= 0.25;
-            p.y *= 0.15;
             float wind = mix(0.02, 0.07, uStorm);
+            // Weather systems: a slow, large field that gathers the clouds into clusters and lanes with clear sky
+            // between, so the sin-sum below never shows its pattern repeating across the sky
+            vec2 w = p.xz + vec2(uTime * wind * 0.4, uTime * wind);
+            float n1 = vnoise(w * 0.035 + 11.7), n2 = vnoise(w * 0.09 - 3.1);
+            float field = n1 * 0.65 + n2 * 0.35;
+            p.xz *= 0.4;                                      // smaller clouds, so their detail reads
+            p.y *= 0.17;
+            p.xz += (vec2(n1, n2) - 0.5) * 2.4;               // and no two alike
             p.z += uTime * wind;
             p.x += uTime * wind * 0.4;
             float d = 0.0, amp = 1.0;
@@ -41,7 +47,7 @@ const Clouds = (() => {
                 amp *= 0.618;
                 p *= 1.618;
             }
-            d += uCover;                                      // coverage grows with the storm
+            d += uCover + (field - 0.5) * mix(1.6, 0.5, uStorm);   // coverage grows with the storm, in patches
             d -= abs(y - 7.0) * mix(0.2, 0.13, uStorm);       // and the cloud deck thickens
             return max(0.0, d);
         }
@@ -55,7 +61,7 @@ const Clouds = (() => {
             if (rd.y < -0.02) { gl_FragColor = vec4(sky, 0.0); return; }
 #if STEPS == 0
             // Painted cloud layer: fbm on a plane overhead, thicker with the storm
-            vec2 uv = rd.xz / max(rd.y, 0.04) * 1.6 + vec2(uTime * 0.01, uTime * 0.004);
+            vec2 uv = rd.xz / max(rd.y, 0.04) * 2.6 + vec2(uTime * 0.01, uTime * 0.004);
             float n = fbm3(uv) * 0.65 + fbm3(uv * 2.7 + 3.1) * 0.35;
             float cov = smoothstep(0.62 - uCover * 0.22, 0.95 - uCover * 0.2, n) * smoothstep(0.0, 0.12, rd.y);
             float dawn0 = 1.0 - smoothstep(0.05, 0.45, uSunDir.y);
@@ -88,7 +94,7 @@ const Clouds = (() => {
             vec3 skyUp = mix(vec3(dot(zen, vec3(0.3, 0.5, 0.2))), zen, 0.45) * 1.5 + 0.035 * (1.0 - nightF());   // sky light, scattered from every side so less blue
             vec2 sh = normalize(sunL.xz + 1e-4);   // bounce from the whole horizon, not just the bright patch under the sun
             vec3 skyLow = (skyColor(vec3(sh.x, 0.04, sh.y)) + skyColor(vec3(-sh.x, 0.04, -sh.y)) + skyColor(vec3(sh.y, 0.04, -sh.x)) + skyColor(vec3(-sh.y, 0.04, sh.x))) * 0.15 + 0.015;
-            const float EXT = 0.17, EXT_L = 1.6;
+            const float EXT = 0.21, EXT_L = 1.6;
 
             vec3 ro = vec3(0.0, -1.0, 0.0);
             float T = 1.0;
@@ -171,7 +177,7 @@ const Clouds = (() => {
         const cfg = CLOUD_Q[q];
         let n = 0;
         if (force) n = 6;
-        else if (dirtyFaces > 0) n = q >= 2 ? Math.min(dirtyFaces, 3) : 1;
+        else if (dirtyFaces > 0) n = q >= 2 ? Math.min(dirtyFaces, q === 3 ? 2 : 3) : 1;
         else if (frame % cfg.every === 0) n = 1;
         if (!n) return;
         const cams = cubeCam.children;

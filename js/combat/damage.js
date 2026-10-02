@@ -6,7 +6,7 @@ const playerDmg = { hull: 100, fires: [], sinking: false, sinkT: 0, lastNearMiss
 const MOUNT_Z = [39, 31.5, -22.2, -33.2, -42];   // Mt 51..55 along the hull
 
 function resetPlayerDamage() {
-    Object.assign(playerDmg, { hull: 100, fires: [], sinking: false, sinkT: 0, lastNearMiss: 0 });
+    Object.assign(playerDmg, { hull: 100, fires: [], sinking: false, sinkT: 0, lastNearMiss: 0, leakT: 0 });
 }
 
 // Is a world point inside our hull or superstructure? (slack widens the test for torpedoes)
@@ -31,7 +31,9 @@ function onPlayerShellHit(p, dir = null) {
     FX.explosion(p);
     playBoom(p, 1.2, 1100, 2.4);
     if (HullDamage.onPlayer(local, 1, dir ? p.clone().addScaledVector(dir, -15) : null, dir) >= 100) breakPlayer();
-    Debris.burst(p, rnd(10, 16), 0.55, { vel: phys.vel.clone(), dir: new THREE.Vector3(Math.sign(local.x || 1), 0.3, 0).applyQuaternion(phys.quat) });
+    const above = local.y > sheerY(local.z) + 0.4;
+    Debris.burst(p, rnd(10, 16), 0.8, { vel: phys.vel.clone(), dir: new THREE.Vector3(Math.sign(local.x || 1), 0.3, 0).applyQuaternion(phys.quat),
+        mix: above ? (local.z > -37 && local.z < 35 ? 'house' : 'deck') : 'hull', crew: above ? 0.3 : 0.1, side: 'us' });
     const dmg = rnd(3, 5);
     playerDmg.hull -= dmg;
     Game.stats.hitsTaken++;
@@ -48,6 +50,7 @@ function onPlayerShellHit(p, dir = null) {
         msg = `Hit in the ${local.z > 0 ? 'forward' : 'after'} engine room — max speed ${Math.round(36.5 * Math.sqrt(phys.engine))} kn`;
     } else if (local.y < 1.2) {
         addFlood(local, 90000);
+        if (Math.random() < 0.5) Slicks.spill(p.x, p.z, rnd(10, 20));
         msg += ' at the waterline — flooding';
     }
     if (Math.random() < 0.4 && playerDmg.fires.length < 6) {
@@ -64,7 +67,8 @@ function onPlayerTorpedoHit(p) {
     playBoom(p, 2.2, 380, 4);
     const dir = new THREE.Vector3(phys.pos.x - p.x, 0, phys.pos.z - p.z).normalize();
     const keel = HullDamage.onPlayer(local.clone().setY(-0.6), 4, p.clone().setY(p.y - 0.8).addScaledVector(dir, -12), dir);
-    Debris.burst(p.clone().setY(p.y + 3), 36, 1, { vel: phys.vel.clone(), speed: 1.2, smoky: 0.5 });
+    Debris.burst(p.clone().setY(p.y + 3), 36, 1.3, { vel: phys.vel.clone(), speed: 1.2, smoky: 0.5, mix: 'blast', crew: 0.8, side: 'us' });
+    Slicks.spill(p.x, p.z, rnd(30, 50), { burn: Math.random() < 0.3 ? rnd(20, 40) : 0 });
     if (keel >= 100) breakPlayer();
     cameraShake(2.2);
     playerDmg.hull -= rnd(34, 44);
@@ -162,6 +166,10 @@ function updatePlayerDamage(dt) {
         playerDmg.sinkT += dt;
         const W = Wreck.get(myShip);
         addFlood(phys.floodPoint.clone(), (W && W.broken ? 420000 : 160000) * dt);   // broken in two she goes fast
+        if (playerDmg.sinkT < 240 && (playerDmg.leakT = (playerDmg.leakT ?? 0) - dt) <= 0) {   // fuel oil welling up
+            playerDmg.leakT = rnd(5, 9);
+            Slicks.spill(phys.pos.x + randn() * 8, phys.pos.z + randn() * 8, rnd(18, 32), { burn: playerDmg.sinkT < 20 && Math.random() < 0.25 ? rnd(15, 30) : 0 });
+        }
     }
 }
 

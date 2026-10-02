@@ -38,6 +38,11 @@ body.playing:not(.captain) #canvas-container canvas { cursor: none; }   /* the g
 body.playing #hud-top, body.playing #messages, body.playing #helm, body.playing #radar,
 body.playing #radarLabel, body.playing #keys, body.playing #camLabel { display: block; }
 body.playing.captain #keys, body.playing.captain #camLabel { display: none; }
+/* Cinematic cameras (F2-F8): the HUD steps aside, the shot's name shows for a moment */
+body.playing.filmcam #hud-top, body.playing.filmcam #helm, body.playing.filmcam #radar, body.playing.filmcam #radarLabel,
+body.playing.filmcam #keys, body.playing.filmcam #overlay { display: none; }
+body.playing.filmcam #camLabel { transition: opacity 1.2s; }
+body.playing.filmcam.filmcam-quiet #camLabel { opacity: 0; }
 body.playing.captain #captainPanel { display: block; }
 body.menu-open #hud-top, body.menu-open #helm, body.menu-open #radar, body.menu-open #radarLabel,
 body.menu-open #keys, body.menu-open #captainPanel, body.menu-open #messages { display: none; }

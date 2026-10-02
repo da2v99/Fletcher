@@ -9,7 +9,8 @@
 // scorch it, and the sea floor shoals up to the beach, so ships can run aground.
 
 const Islands = (() => {
-    const SECTOR = 8000, GEN_R = 19000, DROP_R = 25000, SEED = 1943, MAX_E = 1750;
+    const SECTOR = 8000, SEED = 1943, MAX_E = 1750;
+    let GEN_R = 19000, DROP_R = 25000, viewK = 1;   // build and drop radii, scaled by the view distance
     const HOME = { x: -Math.sin(40 * DEG) * 8600, z: Math.cos(40 * DEG) * 8600 };   // bearing 040 from the start
     const NAMES = ['Vella Lavella', 'Gizo', 'Rendova', 'Ganongga', 'Simbo', 'Tetepare', 'Vangunu', 'Shortland', 'Ballale',
         'Faisi', 'Mono', 'Savo', 'Baga', 'Ranongga', 'Kohinggo', 'Arundel', 'Wana Wana', 'Mbava', 'Fauro', 'Kiambe', 'Liapari',
@@ -1560,6 +1561,15 @@ const Islands = (() => {
         refillNeeded = true;
     }
 
+    // View distance (graphics settings): islands are built and kept out to further, trees and surf drawn further
+    function setViewDist(k) {
+        const vk = Math.min(2.5, Math.max(1, k));
+        if (vk === viewK) return;
+        viewK = vk;
+        GEN_R = 19000 * vk; DROP_R = GEN_R + 6000;
+        if (M) stream(phys.pos.x, phys.pos.z);
+    }
+
     // New game: damaged islands are rebuilt fresh, garrisons stand down, barges return to their piers
     function reset() {
         fires.length = 0;
@@ -1610,8 +1620,8 @@ const Islands = (() => {
                 });
                 isl.dirty = null;
             }
-            isl.trees.forEach(set => { if (set.far) set.far.visible = inView && dEdge < q.farR; });
-            if (isl.surf) isl.surf.visible = inView && dEdge < q.surfR;
+            isl.trees.forEach(set => { if (set.far) set.far.visible = inView && dEdge < q.farR * viewK; });
+            if (isl.surf) isl.surf.visible = inView && dEdge < q.surfR * viewK;
             const b = isl.base;
             if (b) {
                 const dB = Math.hypot(cam.x - b.x, cam.z - b.z);
@@ -1655,7 +1665,7 @@ const Islands = (() => {
     }
 
     return {
-        init, update, reset, setQuality, groundAt, normalAt, near, raycast, steer, clearSpot, structureAt, targets, impact,
+        init, update, reset, setQuality, setViewDist, groundAt, normalAt, near, raycast, steer, clearSpot, structureAt, targets, impact,
         drawRadar, isWater,
         get list() { return list; },
         get bases() { return list.filter(i => i.ready && i.base).map(i => i.base); },

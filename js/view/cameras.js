@@ -14,6 +14,7 @@ const aimCam = { yaw: 0, pitch: -0.04, tYaw: 0, tPitch: -0.04, dist: 95, tDist: 
 function setCameraMode(mode, keepView = false) {
     const prev = cameraMode;
     cameraMode = mode;
+    if (prev === 'film' && mode !== 'film') FilmCam.exit();
     controls.enabled = mode === 'orbit';
     if (mode === 'orbit') controls.target.copy(phys.pos).add(new THREE.Vector3(0, 6, 0));
     if (mode === 'orbit' && !keepView) {
@@ -29,7 +30,7 @@ function setCameraMode(mode, keepView = false) {
     document.body.classList.toggle('aimcam', mode === 'aim');
     document.getElementById('camLabel').textContent = {
         chase: 'Chase camera · click to aim', orbit: 'Orbit camera · click to aim', aim: 'Gun-aim camera · click / Space fire · right mouse zoom · Esc frees the mouse',
-        captain: "Captain's view", aa: 'AA gun', person: 'On foot', cinematic: ''
+        captain: "Captain's view", aa: 'AA gun', person: 'On foot', cinematic: '', film: ''
     }[mode];
 }
 
@@ -38,6 +39,7 @@ function cycleCamera() {
     if (AA.manned) { AA.leave(); return; }
     if (captain.active) { setCaptain(false); return; }
     if (cameraMode === 'aim') { if (document.pointerLockElement) document.exitPointerLock(); setCameraMode('chase'); return; }
+    if (cameraMode === 'film') { setCameraMode('chase'); return; }
     setCameraMode(cameraMode === 'chase' ? 'orbit' : 'chase');
 }
 
@@ -50,6 +52,23 @@ function enterAimCamera() {
     aimCam.fov = camera.fov;
     setCameraMode('aim');
     lockPointer(renderer.domElement);
+}
+
+// A mouse button pressed while another is already held arrives as a pointermove with new e.buttons, not as a
+// pointerdown (Pointer Events "chorded" buttons), so holding right mouse to zoom would swallow the left click
+// that fires. This reports every press and release in a chord: fn(button 0 | 2, down).
+function onMouseChord(fn) {
+    let last = 0;
+    const seen = e => { if (e.pointerType === 'mouse') last = e.buttons; };
+    window.addEventListener('pointerdown', seen, true);
+    window.addEventListener('pointerup', seen, true);
+    window.addEventListener('pointermove', e => {
+        if (e.pointerType !== 'mouse' || e.buttons === last) return;
+        const ch = e.buttons ^ last;
+        last = e.buttons;
+        if (ch & 1) fn(0, !!(e.buttons & 1));
+        if (ch & 2) fn(2, !!(e.buttons & 2));
+    }, true);
 }
 
 // Left click in the chase or orbit camera captures the mouse for the gun-aim camera; right drag orbits and the
@@ -78,6 +97,10 @@ function initCameraInput() {
         if (cameraMode !== 'aim' || e.pointerType !== 'mouse') return;
         if (e.button === 0) director.trigger = false;
         if (e.button === 2) aimCam.zoom = false;
+    });
+    onMouseChord((b, down) => {
+        if (cameraMode !== 'aim' || document.pointerLockElement !== el) return;
+        if (b === 0) { if (down) ensureAudio(); director.trigger = down; } else aimCam.zoom = down;
     });
     el.addEventListener('wheel', e => {
         if (cameraMode === 'aim') {
@@ -130,6 +153,8 @@ function updateCamera(dt, t) {
         Person.updateCamera(dt, t);
     } else if (cameraMode === 'aim') {
         updateAimCamera(dt);
+    } else if (cameraMode === 'film') {
+        FilmCam.update(dt, t);
     } else if (cameraMode === 'chase') {
         const desired = new THREE.Vector3(phys.pos.x - fwdH.x * 85, phys.pos.y + 26, phys.pos.z - fwdH.y * 85);
         camera.position.lerp(desired, 1 - Math.exp(-dt * 2.6));
@@ -145,7 +170,7 @@ function updateCamera(dt, t) {
         camera.lookAt(phys.pos.x, phys.pos.y + 7, phys.pos.z);
     }
     lastShipPos.copy(phys.pos);
-    if (cameraMode === 'aa' || cameraMode === 'person') updateDirector();   // a lock still lays the 5"/38s
+    if (cameraMode === 'aa' || cameraMode === 'person' || cameraMode === 'film') updateDirector();   // a lock still lays the 5"/38s
     else if (cameraMode !== 'captain') {
         if (Game.running) {
             camera.updateMatrixWorld(true);
@@ -153,13 +178,13 @@ function updateCamera(dt, t) {
         } else director.aimValid = false;
     }
 
-    if (cameraMode !== 'captain' && cameraMode !== 'aa' && cameraMode !== 'person') {
+    if (cameraMode !== 'captain' && cameraMode !== 'aa' && cameraMode !== 'person' && cameraMode !== 'film') {
         let floor = waterVisible() ? waterHeight(camera.position.x, camera.position.z, t) + 1.5 : -1e9;
         floor = Math.max(floor, Islands.groundAt(camera.position.x, camera.position.z) + 3);   // never inside a hill
         if (camera.position.y < floor) camera.position.y = floor;
     }
     // Near plane: as far out as the view allows, so distant coastlines don't fight the sea in the depth buffer
-    const near = cameraMode === 'captain' ? (captain.binoc ? 2.5 : 0.25) : cameraMode === 'aa' || cameraMode === 'person' ? 0.12 : 2;
+    const near = cameraMode === 'captain' ? (captain.binoc ? 2.5 : 0.25) : cameraMode === 'aa' || cameraMode === 'person' ? 0.12 : cameraMode === 'film' ? FilmCam.near : 2;
     if (camera.near !== near) { camera.near = near; camera.updateProjectionMatrix(); }
     applyCameraShake(dt);
 }

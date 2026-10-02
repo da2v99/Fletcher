@@ -38,7 +38,7 @@ function autoPreset() {
 
 const SETTINGS_KEY = 'fletcher.settings.v1';
 const Settings = {
-    gfx: Object.assign({ preset: 'auto', dynamicRes: true, targetFps: 60, fps: false, lowLatency: true }, GFX_PRESETS.high),
+    gfx: Object.assign({ preset: 'auto', dynamicRes: true, targetFps: 60, fps: false, lowLatency: true, viewDist: 1 }, GFX_PRESETS.high),
     ctl: {
         touchUI: 'auto',        // auto | on | off
         steering: 'slider',     // slider | wheel | gyro

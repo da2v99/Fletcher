@@ -142,6 +142,10 @@ function initCaptainInput() {
         if (e.button === 0 && captain.active) director.trigger = false;
         if (e.button === 2 && captain.locked) captain.binoc = false;
     });
+    onMouseChord((b, down) => {
+        if (!captain.active || !captain.locked || !Game.running) return;
+        if (b === 0) { if (down) ensureAudio(); director.trigger = down; } else captain.binoc = down;
+    });
     window.addEventListener('mousemove', e => {
         if (!captain.active || (!captain.locked && !captain.dragging) || !Number.isFinite(e.movementX)) return;
         const sens = 0.0022 * captain.fov / 55 * zoomSens(captain.fov) * Settings.ctl.lookSens;

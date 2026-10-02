@@ -25,6 +25,7 @@ const Game = {
         sprayFx.clear();
         fireFx.clear();
         Debris.clear();
+        Slicks.clear();
         HullDamage.clear(myShip);
         Wreck.repair(myShip);
         Person.reset();

@@ -314,6 +314,10 @@ const AA = (() => {
             if (e.button === 0 && st.manned) AA.trigger = false;
             if (e.button === 2) st.zoomHold = false;
         });
+        onMouseChord((b, down) => {
+            if (!st.manned) return;
+            if (b === 0) { if (down) ensureAudio(); AA.trigger = down; } else st.zoomHold = down;
+        });
         window.addEventListener('mousemove', e => {
             if (!st.manned || !Number.isFinite(e.movementX)) return;
             if (document.pointerLockElement !== el && !(e.buttons & 1)) return;   // without the pointer captured, drag to aim

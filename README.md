@@ -15,14 +15,15 @@ Screen" runs it fullscreen.
 | Mouse | Third-person gun crosshair: the 5"/38s train on whatever is under it (a ship, the shore, the sea, or max range above the horizon) |
 | X | Lock what's under the crosshair: a ship, a shore target (gun, AA pit, building, truck) or a plane is tracked with lead; a point of sea or shore stays put. X on the current lock releases it |
 | Space | Fire the 5"/38s at the director's target (also left-click in the captain's view). Locked on a plane they fire VT proximity-fuzed shells |
-| Left click | Gun-aim camera: the mouse is captured and orbits the camera round the ship, the crosshair sits fixed in the centre (sub-pixel aim). Click / Space fires, right mouse holds a 3× zoom, wheel sets the distance, X locks, Esc frees the mouse |
+| Left click | Gun-aim camera: the mouse is captured and orbits the camera round the ship, the crosshair sits fixed in the centre (sub-pixel aim). Click / Space fires (also while holding the zoom), right mouse holds a 3× zoom, wheel sets the distance, X locks, Esc frees the mouse |
 | Right drag / middle drag / wheel | Orbit / pan / zoom the camera (a drag in chase view switches to orbit) |
 | B | Captain's view on the bridge: mouse look, right-click / Z / wheel = binoculars, X locks the target under the reticle |
 | G | Man an AA gun (the 40 mm or 20 mm that best covers the nearest plane). Mouse aims, click / Space fires, wheel or right mouse / Z for a little magnification (up to 2×), R: every mount that bears follows your sight and fires with you, Q next gun (Shift+Q back), X locks the plane in your sight for the 5"/38s, G leaves. The AI captain has the conn and the 5"/38s meanwhile |
 | E | Step out onto the deck yourself, from any view (see On foot below); E again (with nothing to use in front of you) returns to the ship view |
 | T | Train out a torpedo mount and fire a 5-torpedo spread |
 | Q / R | Move between port wing, open bridge, starboard wing (captain's view) |
-| C | Chase / orbit camera (leaves the captain's view or the AA gun) |
+| C | Chase / orbit camera (leaves the captain's view, the AA gun or a cinematic camera) |
+| F2 - F8 | Cinematic cameras that track the ship, HUD hidden: F2 fly-by (a camera set up ahead, off her track, that pans and zooms as she sweeps past, then leapfrogs ahead), F3 camera boat (low on the water alongside, riding the swell), F4 drone (slow high orbit), F6 long lens (telephoto from a mile off), F7 deck cams bolted to the ship (bow, waterline, masthead, stern, bridge wing; F7 again for the next), F8 director (cuts between them by itself) |
 | Esc / P | Pause, settings |
 
 **Touch:** a brass engine-order telegraph (drag the lever), a rudder slider or ship's wheel (or tilt the phone),
@@ -31,7 +32,8 @@ binoculars. On an AA gun: drag (or tilt, with gyro aim on) to aim, hold FIRE, EX
 
 **Settings** (main or pause menu), saved in the browser:
 - *Graphics:* presets from Low (phones) to Cinematic, render resolution, dynamic resolution and target frame rate,
-  ocean, island, cloud and shadow detail, water reflections (off, half resolution, or "RTX" full resolution; on
+  view distance (about 9 to 60 km: thinner haze, a wider sea, islands built further out), ocean, island, cloud
+  and shadow detail, water reflections (off, half resolution, or "RTX" full resolution; on
   by default in Ultra and Cinematic), effects density, and the cinematic pass: bloom, light shafts, sun flare,
   colour grade, vignette, film grain, 2.39:1 letterbox, FXAA or MSAA.
 - *Controls:* touch controls on/off, steering (slider, wheel or gyro tilt), gyro aim, sensitivities, left-handed
@@ -126,10 +128,21 @@ bottom too): the light fails as you sink, the murk closes in, air pours out of t
   of it breaks her in two: a torpedo amidships can do it to a destroyer, two to the Fletcher, and an enemy
   warship that blows up often goes in two. The halves pivot about the torn break, ends climbing out of the water,
   and go down fast.
-- **Wreckage:** torn plate, beams, machinery, lockers, planks, drums and life rings fly out of every hit, tumble and
-  smoke. In the water, wood, drums, floats and anything with air trapped in it float for a minute or two: they sit
-  at their own waterline, lie along the wave and drift downwind. Steel goes down after a moment, tumbling into the
-  murk until it's lost from sight. Badly hurt warships can have a gun mount blown clean off.
+- **Wreckage:** some twenty kinds, sized to the blast: crumpled, ragged-edged plate a metre to four across, curved
+  hull plating torn out with its frames still on, I-beams up to 8 m (straight or kinked and twisted), bent pipe
+  with its flange, machinery, a spray of small shrapnel, lockers, splintered planks, drums, life rings, chairs,
+  mess tables, bunks with their mattresses, insulation and cork, crates. Every piece has its own tint, size and
+  proportions. What comes out depends on what was hit (hull steel, deckhouse fittings, deck gear), and heavy
+  pieces are thrown slower while plate and insulation flutter. Hits on manned spots throw crewmen too (kapok
+  jackets on ours, summer whites on theirs), kept simple. In the water, wood, cork, drums, floats, bodies and
+  anything with air trapped in it float for a minute or more: they sit at their own waterline, lie along the
+  wave and drift downwind. Steel goes down after a moment, tumbling into the murk until it's lost from sight.
+  Badly hurt warships can have a gun mount blown clean off.
+- **Oil and fuel:** a hull holed at the waterline bleeds oil, a torpedo hit or a ship blowing up spills a big
+  slick, and a sinking ship (yours too) keeps it welling up over the spot. The ocean shader draws a black film
+  that calms the ripples to a glassy patch, with a rainbow sheen at its ragged thin edges; slicks spread, drift
+  downwind and thin out over a few minutes. Burst fuel can set the water alight for a while, and a plane that
+  goes into the sea leaves a small burning patch.
 - **Splashes:** a 5" shell throws a ~45 m white column that keeps building, spreads, collapses in a curtain of
   spray and leaves mist; 40 mm and 20 mm rounds throw ~15 m and ~10 m plumes, a torpedo ~80 m. No two are alike:
   each has its own height, one to four jets, a lean with the wind and a lopsided crown, and every spray sprite has
@@ -154,7 +167,9 @@ turns golden then deep orange, and the clouds light orange on top with violet-gr
 follows the same colours.
 Stars are individual points (about 14,000, with a Milky Way band and its dark rift) drawn at screen resolution,
 fading in after sunset, twinkling low down and hidden by cloud; the time slider now runs into full night
-(04:24-19:36). The cloud cube is sharper and its texels are filtered away.
+(04:24-19:36). The cloud cube is sharper and its texels are filtered away. The clouds are smaller, so their
+detail reads, with a slow large-scale field that gathers them into clusters and lanes of clear sky and warps
+each one, so the pattern never repeats across the sky; the higher cloud levels render a finer cube.
 The volumetric clouds are lit physically: each sample marches toward the sun to find how much cloud shades it
 (Beer-Lambert), a two-lobe Henyey-Greenstein phase gives the bright silver lining round the sun, a softer
 multiple-scattering term keeps thick cloud glowing instead of going black, the "powder" effect darkens thin
@@ -188,12 +203,12 @@ flight and drop, need a moment to get on, and can't fire into the ship), or take
 |---|---|
 | `core/` | Ship constants, math helpers, geometry helpers, saved settings and graphics presets |
 | `ship/` | The Fletcher model: hull lines, fittings, assembly |
-| `env/` | `sea.js` wave model (shared by GPU and CPU), `ocean.js` surface shader, `clouds.js` volumetric sky, `reflect.js` planar water reflections, `stars.js`, `underwater.js` (murk, fish), `weather.js`, `shipWaves.js` (Kelvin wake) |
+| `env/` | `sea.js` wave model (shared by GPU and CPU), `ocean.js` surface shader, `clouds.js` volumetric sky, `reflect.js` planar water reflections, `slicks.js` oil and fuel on the water, `stars.js`, `underwater.js` (murk, fish), `weather.js`, `shipWaves.js` (Kelvin wake) |
 | `physics/` | Rigid-body buoyancy and handling, flooding |
 | `fx/` | Particles (spray, smoke, fire), debris and hull damage, tracers, synthesised audio, post-processing and the renderer |
 | `combat/` | Ballistics and shells, torpedoes, enemy ship models and AI, aircraft and air raids, our 5"/38s, torpedoes and AA battery, the AI captain, damage model |
 | `world/` | Islands: terrain, jungle, bases and their garrisons |
-| `view/` | Cameras, aiming, the captain's binocular view, and you on foot |
+| `view/` | Cameras, the cinematic cameras (`filmcam.js`), aiming, the captain's binocular view, and you on foot |
 | `ui/` | HUD, SG radar scope, menus, settings panel, touch controls |
 | `game.js`, `main.js` | Game flow and the main loop |
 

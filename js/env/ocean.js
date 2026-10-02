@@ -26,11 +26,15 @@ const OCEAN_GRID = [
 const OCEAN_TRAIL = [12, 24, 48];
 
 // Dense near the camera, stretching to the horizon; y stores the local grid spacing for anti-aliasing
+// The sea reaches well past the haze at the chosen view distance
+const oceanRadius = () => 22000 * Math.max(1, Settings.gfx.viewDist || 1);
+
 function createOceanGeometry(q) {
     const { seg: SEG, dr0, near, grow } = OCEAN_GRID[q];
     const radii = [0];
     let r = 0, dr = dr0;
-    while (r < 22000) {
+    const R = oceanRadius();
+    while (r < R) {
         r += dr;
         radii.push(r);
         if (r > near) dr *= grow;
@@ -197,8 +201,29 @@ const OCEAN_SHADE_GLSL = `
     uniform sampler2D uReflTex;
     uniform mat4 uReflMat;
     uniform float uReflOn;
+    uniform vec4 uSlick[16];
+    // Oil and fuel on the water (slicks.js): xy centre, z radius, w how black. Ragged edges from a noise field
+    // shared by all of them; sheen is the thin rim where the film shows colours
+    float slickAt(vec2 xz, out float sheen) {
+        sheen = 0.0;
+        if (uSlick[0].z <= 0.0) return 0.0;
+        float n = vnoise(xz * 0.016) * 0.6 + vnoise(xz * 0.065 + 3.7) * 0.4;
+        float s = 0.0;
+        for (int i = 0; i < 16; i++) {
+            vec4 k = uSlick[i];
+            if (k.z <= 0.0) break;
+            float r = length(xz - k.xy) / k.z;
+            if (r > 1.7) continue;
+            float e = r + (n - 0.5) * 1.1;
+            s = max(s, (1.0 - smoothstep(0.35, 0.95, e)) * k.w);
+            sheen = max(sheen, (smoothstep(0.3, 0.8, e) - smoothstep(0.85, 1.25, e)) * k.w);
+        }
+        return s;
+    }
     vec3 shadeSea(vec3 world, vec2 p0, vec3 N, float colorH, vec4 fw, float shore) {
         float dist = length(cameraPosition - world);
+        float sheen, oil = slickAt(world.xz, sheen);
+        N = normalize(mix(N, vec3(0.0, 1.0, 0.0), oil * 0.75));   // the film damps the ripples: glassy
         float hNorm = clamp((colorH + uNormSpan * 0.5) / uNormSpan, 0.0, 1.0);
         hNorm = 0.5 + (hNorm - 0.5) * uSeaScale.w;
         float colorMix = pow(hNorm, uEx3.x);
@@ -231,12 +256,19 @@ const OCEAN_SHADE_GLSL = `
         float nh = max(dot(N, Hs), 0.0);
         col += uSunCol * (pow(nh, 700.0) * 1.6 + pow(nh, 80.0) * 0.1) * (1.0 - 0.85 * uStorm) * smoothstep(-0.02, 0.05, uSunDir.y);
 
+        // Oil: black film over the water's own colour (the glassy reflection stays), a rainbow at the thin rim
+        if (oil + sheen > 0.0) {
+            col = mix(col, vec3(0.014, 0.012, 0.01) * light + refl * fres * 0.4, oil * 0.92);
+            vec3 rainbow = 0.5 + 0.5 * cos(6.2831 * (vec3(0.0, 0.33, 0.67) + world.x * 0.011 + world.z * 0.008 + dot(N, V) * 2.0));
+            col += rainbow * sheen * 0.07 * light;
+        }
+
         // Ship foam, the wake, and storm streaks on top
         float worldTex = smoothstep(0.3, 0.62, fbm3(p0 * 0.6) + 0.15);
         float wakeTex = smoothstep(0.3, 0.62, fbm3(vec2(fw.z * 0.3, fw.w * 2.6)) + 0.12 + 0.25 * fw.y);
         float streak = uStorm * smoothstep(0.62, 0.8, fbm3(vec2(dot(p0, uWind) * 0.05, dot(p0, vec2(-uWind.y, uWind.x)) * 0.6) + uTime * 0.02));
         float foam = clamp(max(streak * 0.45, max(fw.x * worldTex, fw.y * wakeTex)), 0.0, 1.0);
-        col = mix(col, vec3(0.88, 0.92, 0.94) * light * (0.6 + 0.4 * max(dot(N, L), 0.0)), foam * 0.92);
+        col = mix(col, vec3(0.88, 0.92, 0.94) * light * (0.6 + 0.4 * max(dot(N, L), 0.0)), foam * 0.92 * (1.0 - oil * 0.7));
         col += vec3(0.02, 0.12, 0.13) * fw.y * light;
         col += islandShallows(world.xz, dist, shore) * light;
 
@@ -381,12 +413,13 @@ function createOcean(skyCube, q = Settings.gfx.ocean) {
         uTrail: { value: trailU },
         uTrailOdo: { value: trailOdo },
         uIsland: { value: islandBlobU }
-    }, SEA_U, WEATHER_U, UNDER_U, REFL_U);
+    }, SEA_U, WEATHER_U, UNDER_U, REFL_U, SLICK_U);
     const mat = new THREE.ShaderMaterial(Object.assign({ uniforms, extensions: { derivatives: true } }, oceanShaders(q)));
     const mesh = new THREE.Mesh(createOceanGeometry(q), mat);
     mesh.frustumCulled = false;
     mesh.renderOrder = 2;   // after the boats' water masks (person.js), so no sea shows inside an open boat
     mesh.userData.quality = q;
+    mesh.userData.radius = oceanRadius();
     return mesh;
 }
 
