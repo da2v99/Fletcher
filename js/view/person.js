@@ -1,6 +1,6 @@
-// You, on foot: walk the Fletcher's decks, climb from deck to deckhouse to bridge, go over the side, swim (and
-// dive), wade ashore, climb back aboard up a scramble net, or row the whaleboat. V steps out of whatever view
-// you are in onto the deck (and back); the AI captain has the conn while you are away from the bridge.
+// You, on foot (E): walk the Fletcher's decks, climb from deck to deckhouse to bridge, go over the side, swim (and
+// dive), wade ashore, climb back aboard up a scramble net, or row the whaleboat. E steps out of whatever view
+// you are in onto the deck (and back; E also uses whatever is in front of you); the AI captain has the conn while you are away from the bridge.
 //
 // Modes:
 //   deck  ship-local: your feet ride the ship (heave, roll, pitch) and walk on a plan of her walkable tops:
@@ -101,7 +101,7 @@ const Person = (() => {
         document.body.classList.add('onfoot');
         camera.fov = 70;
         camera.updateProjectionMatrix();
-        hudMessage(Settings.touchUI ? 'On deck.' : 'On deck. WASD walk · Shift run · Space jump / climb · F use · V back to the ship view. Jump the rail to go over the side.', 'info');
+        hudMessage(Settings.touchUI ? 'On deck.' : 'On deck. WASD walk · Shift run · Space jump / climb · E use, or back to the ship view · Jump the rail to go over the side.', 'info');
     }
 
     function exit(toMode = 'chase') {
@@ -144,12 +144,25 @@ const Person = (() => {
     // ------------------------------------------------------------------ the whaleboat
     function buildBoat() {
         boat.obj = createWhaleboat();
-        boat.obj.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+        // Plain copies of the ship's paints: the ship's own carry her holes and break line (wreck.js)
+        const plain = new Map();
+        const own = m => {
+            if (!plain.has(m)) {
+                const c = m.clone();
+                c.onBeforeCompile = THREE.Material.prototype.onBeforeCompile;
+                c.customProgramCacheKey = THREE.Material.prototype.customProgramCacheKey;
+                plain.set(m, c);
+            }
+            return plain.get(m);
+        };
+        boat.obj.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; o.material = own(o.material); } });
         [-1, 1].forEach(s => {
             const pivot = new THREE.Group();
             pivot.position.set(s * 1.0, 0.05, 0.4);
-            const loom = addMesh(pivot, CylX(0.035, 3.6, 6), MAT.wood, s * 1.3, 0, 0);
-            addMesh(pivot, Box(0.75, 0.03, 0.16), MAT.wood, s * 3.0, 0, 0);
+            const wood = boat.obj.children.find(c => c.isMesh && c.material.color && c.material.color.getHex() === MAT.wood.color.getHex());
+            const wmat = wood ? wood.material : new THREE.MeshStandardMaterial({ color: 0x6b5a44, roughness: 0.95 });
+            const loom = addMesh(pivot, CylX(0.035, 3.6, 6), wmat, s * 1.3, 0, 0);
+            addMesh(pivot, Box(0.75, 0.03, 0.16), wmat, s * 3.0, 0, 0);
             loom.castShadow = true;
             boat.obj.add(pivot);
             boat.oars.push(pivot);
@@ -280,16 +293,16 @@ const Person = (() => {
         // An AA gun within reach
         let bi = -1, bd = 2.4;
         AA.mounts.forEach((m, i) => { const d = Math.hypot(m.obj.position.x - L.x, m.obj.position.z - L.z); if (d < bd && Math.abs(m.obj.position.y - L.y) < 2) { bd = d; bi = i; } });
-        if (bi >= 0 && Game.running) return { label: `F: man the ${AA.mounts[bi].name}`, fn: () => { exit(null); AA.enter(bi); } };
+        if (bi >= 0 && Game.running) return { label: `E: man the ${AA.mounts[bi].name}`, fn: () => { exit(null); AA.enter(bi); } };
         if (L.z > 22 && L.z < 28 && L.y > st.bridgeY - 0.6 && Game.running) {
-            return { label: 'F: take the conn (bridge)', fn: () => { const s = L.x > 2.5 ? 0 : L.x < -2.5 ? 2 : 1; exit(null); setCaptain(true); captain.station = s; } };
+            return { label: 'E: take the conn (bridge)', fn: () => { const s = L.x > 2.5 ? 0 : L.x < -2.5 ? 2 : 1; exit(null); setCaptain(true); captain.station = s; } };
         }
         if (L.x < -3 && L.z > 12.5 && L.z < 20.5 && L.y < sheerY(L.z) + LVL1_H + 0.5) {
-            return { label: boat.launched ? 'F: go down into the whaleboat' : 'F: lower the whaleboat and go down into it', fn: () => {
+            return { label: boat.launched ? 'E: go down into the whaleboat' : 'E: lower the whaleboat and go down into it', fn: () => {
                 if (!boat.launched || boat.pos.distanceTo(phys.pos) > 200) launchBoat(true);
                 toWorld('boat');
                 st.yaw = st.tYaw = 0;
-                hudMessage('In the whaleboat. W / S row · A / D turn · Shift pull hard · F over the side.', 'info');
+                hudMessage('In the whaleboat. W / S row · A / D turn · Shift pull hard · E over the side.', 'info');
             } };
         }
         return null;
@@ -367,10 +380,10 @@ const Person = (() => {
 
     function waterAction(P) {
         if (boat.launched && Math.hypot(boat.pos.x - P.x, boat.pos.z - P.z) < 4.5 && P.y > boat.pos.y - 2.5) {
-            return { label: 'F: climb into the whaleboat', fn: () => { st.mode = 'boat'; st.yaw = st.tYaw = wrapAngle(st.yaw - boat.heading); hudMessage('In the whaleboat. W / S row · A / D turn · Shift pull hard · F over the side.', 'info'); } };
+            return { label: 'E: climb into the whaleboat', fn: () => { st.mode = 'boat'; st.yaw = st.tYaw = wrapAngle(st.yaw - boat.heading); hudMessage('In the whaleboat. W / S row · A / D turn · Shift pull hard · E over the side.', 'info'); } };
         }
         const afloat = !playerDmg.sinking && myShip.localToWorld(_w.set(0, sheerY(0), 0)).y > waterHeight(phys.pos.x, phys.pos.z, simTime) + 1;
-        if (afloat && playerHitTest(P, 3.5) && P.y > waterHeight(P.x, P.z, simTime) - 1.5) return { label: 'F: climb the scramble net', fn: climbAboard };
+        if (afloat && playerHitTest(P, 3.5) && P.y > waterHeight(P.x, P.z, simTime) - 1.5) return { label: 'E: climb the scramble net', fn: climbAboard };
         return null;
     }
 
@@ -403,7 +416,7 @@ const Person = (() => {
         else if (st.mode === 'land') updateLand(dt, t);
         else if (st.mode === 'boat') {
             updateBoat(dt, t, true);
-            st.action = { label: 'F: go over the side', fn: () => {
+            st.action = { label: 'E: go over the side', fn: () => {
                 const r = _w.set(Math.cos(boat.heading), 0, -Math.sin(boat.heading));
                 st.pos.copy(boat.pos).addScaledVector(r, 1.8).setY(waterHeight(boat.pos.x, boat.pos.z, simTime) - 0.3);
                 st.vel.set(0, 0, 0);
@@ -448,10 +461,11 @@ const Person = (() => {
             return true;
         }
         if (!down || e.repeat) return true;
-        if (k === 'f') { if (st.action) st.action.fn(); return true; }
-        if (k === 'v') {
+        // E: use what is in front of you; with nothing to use on deck, back to the ship view. F does the same.
+        if ((k === 'e' || k === 'f') && st.action) { st.action.fn(); return true; }
+        if (k === 'e') {
             if (st.mode === 'deck' && Game.running) exit();
-            else hudMessage(st.mode === 'deck' ? 'She is going down — swim for it!' : 'Get back aboard first (F at the ship\'s side).', 'warn');
+            else hudMessage(st.mode === 'deck' ? 'She is going down — swim for it!' : 'Get back aboard first (E at the ship\'s side).', 'warn');
             return true;
         }
         if (!Game.running) return true;
@@ -543,7 +557,7 @@ const Person = (() => {
         document.body.classList.add('onfoot');
         camera.fov = 70;
         camera.updateProjectionMatrix();
-        hudMessage('In the water. Swim to the whaleboat (WASD) and press F to climb in.', 'info');
+        hudMessage('In the water. Swim to the whaleboat (WASD) and press E to climb in.', 'info');
     }
 
     function reset() {

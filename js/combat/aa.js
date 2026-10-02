@@ -2,7 +2,7 @@
 // Oerlikons (450 a minute, 820 m/s). AI gun crews engage aircraft on their own (Controls: AI gunners), leading the
 // target by the round's time of flight and drop, as the Mk 51 directors and Mk 14 gyro sights did.
 // Take a gun yourself with G (or the AA button): mouse / drag to aim, click / Space / FIRE to shoot, wheel or right
-// mouse / Z for a little magnification, Q / E for the next gun, R to have every mount that bears follow your
+// mouse / Z for a little magnification, Q for the next gun (Shift+Q back), R to have every mount that bears follow your
 // sight and fire with you, G to leave. X locks the plane in your sight for the 5"/38s (VT shells). While you
 // are on a gun the AI captain has the conn and the 5"/38s (autoCaptain.js).
 
@@ -65,7 +65,7 @@ const AA = (() => {
                 }
             },
             onLand: p => { FX.dirt(p, m.kind === 40 ? 0.1 : 0.04); Islands.impact(p, small, null, true); },
-            onWater: p => FX.smallSplash(p.x, waterHeight(p.x, p.z, simTime), p.z, m.kind === 40 ? 1 : 0.6),
+            onWater: p => FX.aaSplash(p.x, waterHeight(p.x, p.z, simTime), p.z, m.kind === 40),
             burst: m.kind === 40 ? p => FX.flak(p, 0.3) : null
         };
     }
@@ -120,7 +120,7 @@ const AA = (() => {
             life: 0.06, s0: m.kind === 40 ? 1.6 : 0.9, s1: m.kind === 40 ? 2.6 : 1.4, r: 1, g: 0.75, b: 0.35, a: 1, drag: 8, grav: 0 });
         if (Math.random() < 0.5) smokeFx.emit({ x: _p.x, y: _p.y, z: _p.z, vx: phys.vel.x * 0.6 + _dir.x * 4, vy: 1 + _dir.y * 4, vz: phys.vel.z * 0.6 + _dir.z * 4,
             life: rnd(1, 2.2), s0: 0.6, s1: m.kind === 40 ? 4 : 2.5, r: 0.85, g: 0.84, b: 0.82, a: 0.3, drag: 1.5, grav: -0.2 });
-        if (loudFactor > 1) playBurst(_p, 1, 0, gun.loud * loudFactor, gun.pitch);   // our own gun: every report, right now
+        if (loudFactor > 1) playAutoGun(_p, 1, 0, gun.loud * loudFactor, m.kind);   // our own gun: every report, right now
         else m.rounds++;
     }
 
@@ -193,7 +193,7 @@ const AA = (() => {
         m.soundT -= dt;
         if (m.soundT <= 0) {
             m.soundT = 0.3;
-            if (m.rounds > 0) { playBurst(_mw, m.rounds, 0.3 / m.rounds, gun.loud, gun.pitch); m.rounds = 0; }
+            if (m.rounds > 0) { playAutoGun(_mw, m.rounds, 0.3 / m.rounds, gun.loud, m.kind); m.rounds = 0; }
         }
     }
 
@@ -232,7 +232,7 @@ const AA = (() => {
         st.zoom = 0;
         setCameraMode('aa');
         document.body.classList.add('aaview');
-        hudMessage(`On the ${m.name} ${m.gun.name}. ${Settings.touchUI ? 'Drag to aim, hold FIRE.' : 'Mouse aims · click / Space fires · wheel / right mouse zooms · R: all guns follow your sight · Q/E next gun · X locks the plane for the 5" · G leaves. The captain has the conn.'}`, 'info');
+        hudMessage(`On the ${m.name} ${m.gun.name}. ${Settings.touchUI ? 'Drag to aim, hold FIRE.' : 'Mouse aims · click / Space fires · wheel / right mouse zooms · R: all guns follow your sight · Q next gun (Shift+Q back) · X locks the plane for the 5" · G leaves. The captain has the conn.'}`, 'info');
     }
     function leave() {
         if (!st.manned) return;

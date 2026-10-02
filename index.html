@@ -54,7 +54,7 @@
         <b>W/S</b> engine order · <b>0</b> all stop · <b>A/D</b> rudder<br>
         <b>Mouse</b> crosshair · <b>X</b> lock target · <b>Space</b> fire · <b>T</b> torpedoes<br>
         <b>Click</b> gun-aim camera · <b>RMB</b> orbit / zoom · <b>Wheel</b> zoom · <b>C</b> chase / orbit<br>
-        <b>B</b> captain's view · <b>G</b> AA gun · <b>V</b> walk the deck · <b>Esc</b> pause
+        <b>B</b> captain's view · <b>G</b> AA gun · <b>E</b> walk the deck · <b>Esc</b> pause
     </div>
 
     <div id="captainPanel">
@@ -62,7 +62,7 @@
         <div id="cpRange">RANGE ——</div>
         <div id="cpBearing"></div>
         <div id="cpGuns"></div>
-        <div id="cpHelp">Click to take the binoculars · Mouse: look · Right-click / Z / Wheel: binoculars &amp; zoom · X: lock / release target · Left-click / Space: fire · T: torpedoes · Q / E: station · G: AA gun · B: leave</div>
+        <div id="cpHelp">Click to take the binoculars · Mouse: look · Right-click / Z / Wheel: binoculars &amp; zoom · X: lock / release target · Left-click / Space: fire · T: torpedoes · Q / R: station · E: step out on deck · G: AA gun · B: leave</div>
     </div>
 
     <!-- ===== Menus ===== -->
@@ -83,10 +83,10 @@
                 <span>Space</span><span>Fire the 5"/38s</span>
                 <span>B</span><span>Captain's view: binoculars and gun director</span>
                 <span>T</span><span>Launch a 5-torpedo spread</span>
-                <span>G</span><span>Man an AA gun (Q / E: next gun)</span>
+                <span>G</span><span>Man an AA gun (Q: next gun, R: all guns follow you)</span>
                 <span>Click</span><span>Gun-aim camera: the mouse orbits, crosshair in the centre (Esc frees the mouse)</span>
                 <span>RMB / MMB</span><span>Orbit / pan the camera (C: back to chase)</span>
-                <span>V</span><span>Walk the deck: climb, jump overboard, swim, row the whaleboat</span>
+                <span>E</span><span>Step out on deck: climb, jump overboard, swim, row the whaleboat (E again to go back)</span>
             </div>
             <div class="touch-help">Drag the telegraph lever for speed · steer with the rudder slider, the wheel or by tilting the phone (Settings › Controls) · tap a target to lock it · hold FIRE · AA puts you on a 40 mm gun · VIEW for the bridge binoculars</div>
         </div>
@@ -169,6 +169,7 @@
     <script src="js/fx/audio.js"></script>
     <script src="js/fx/post.js"></script>
     <script src="js/fx/debris.js"></script>
+    <script src="js/fx/wreck.js"></script>
     <script src="js/combat/ballistics.js"></script>
     <script src="js/combat/torpedoes.js"></script>
     <script src="js/combat/enemyModels.js"></script>

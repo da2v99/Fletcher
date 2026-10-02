@@ -26,6 +26,7 @@ const Game = {
         fireFx.clear();
         Debris.clear();
         HullDamage.clear(myShip);
+        Wreck.repair(myShip);
         Person.reset();
         Underwater.reset();
         AutoCaptain.reset();

@@ -133,7 +133,7 @@ function updateShells(dt, t) {
             if (!done && s.pos.y < 8) {
                 const wh = waterHeight(s.pos.x, s.pos.z, t);
                 if (s.pos.y < wh) {
-                    FX.splash(s.pos.x, wh, s.pos.z, s.tint);
+                    FX.splash(s.pos.x, wh, s.pos.z);
                     playBoom(s.pos, 0.35, 500, 1.0);
                     if (s.owner === 'enemy') onEnemyShellMiss(s.pos);
                     else Islands.alertNear(s.pos);

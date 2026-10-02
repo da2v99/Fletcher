@@ -11,6 +11,9 @@ const waterVisible = () => ocean && ocean.visible;
 window.addEventListener('load', () => {
     initRenderer();
     myShip = buildShip(scene);
+    // Our hull can hole, dent, sag and break in two (wreck.js): the Fletcher's materials are hers alone
+    const hullMat = myShip.children[0].material;
+    Wreck.attach(myShip, { ownMaterials: true, inner: m => m === hullMat || m === MAT.deck, maxTilt: 0.6 });
     initPhysics();
     resetPhysics();
 
@@ -108,10 +111,9 @@ function initKeys() {
         if (k === ' ') { ensureAudio(); if (AA.manned) AA.trigger = true; else director.trigger = true; }
         if (e.repeat) return;
         if (k === 'g') { ensureAudio(); AA.toggleManned(); return; }
-        if (k === 'v') { ensureAudio(); Person.enter(); return; }
+        if (k === 'e') { ensureAudio(); Person.enter(); return; }   // step out of the ship view onto the deck
         if (AA.manned) {
-            if (k === 'q') AA.cycle(-1);
-            if (k === 'e') AA.cycle(1);
+            if (k === 'q') AA.cycle(e.shiftKey ? -1 : 1);
             if (k === 'z') AA.toggleZoom();
             if (k === 'r') AA.toggleBattery();
             if (k === 'x') toggleLock(window.innerWidth / 2, window.innerHeight / 2);
@@ -138,7 +140,7 @@ function initKeys() {
         if (captain.active) {
             if (k === 'z') captain.binoc = !captain.binoc;
             if (k === 'q') captain.station = Math.max(0, captain.station - 1);
-            if (k === 'e') captain.station = Math.min(2, captain.station + 1);
+            if (k === 'r') captain.station = Math.min(2, captain.station + 1);
         }
     });
     window.addEventListener('blur', () => { drive.left = drive.right = false; director.trigger = false; AA.trigger = false; });
@@ -193,6 +195,7 @@ function animate() {
     myShip.position.copy(phys.pos);
     myShip.quaternion.copy(phys.quat);
     myShip.updateMatrixWorld(true);
+    Wreck.pose(myShip, dt);   // broken in two: each half pivots about the break
     if (dt > 0) {
         AutoCaptain.update(dt);
         updatePlayerGuns(dt);
@@ -233,6 +236,7 @@ function animate() {
     updateFogColor();
     Underwater.update(realDt, simTime);
 
+    Wreck.update();
     Gfx.render(realDt * 1000, simTime);
     checkShaders();
     drawOverlay();

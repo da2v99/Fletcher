@@ -155,7 +155,7 @@ let shockGeo, shockMat;
 
 function initEffects() {
     smokeFx = createParticleSystem(9000, THREE.NormalBlending, 'puff');
-    sprayFx = createParticleSystem(14000, THREE.NormalBlending, 'spray');
+    sprayFx = createParticleSystem(22000, THREE.NormalBlending, 'spray');
     fireFx = createParticleSystem(5000, THREE.AdditiveBlending);
     scene.add(smokeFx.points, sprayFx.points, fireFx.points);
     muzzleLight = new THREE.PointLight(0xffa655, 0, 90, 2);
@@ -187,50 +187,68 @@ function updateEffects(dt) {
 const WHITE_SPRAY = [0.93, 0.96, 0.98];
 
 const FX = {
-    // Shell splash: a fast crown of spray, a tall column that slows, hangs and collapses, a base surge racing
-    // out over the water, then drifting mist and a foam patch. A 5" shell throws up ~20-25 m; scale 2.6 is a
-    // torpedo. IJN shells carried dye so each ship could spot its own fall of shot.
-    splash(x, y, z, tint = WHITE_SPRAY, scale = 1) {
-        const [r, g, b] = tint;
-        const H = 23 * Math.pow(scale, 0.8), vMax = Math.sqrt(2 * GRAVITY * H), R = 2.2 * Math.sqrt(scale);
-        const wx = Sea.wind.x * 2.5, wz = Sea.wind.y * 2.5;   // spray drifts downwind
-        const floor = y - 0.3, k = Math.sqrt(scale);
-        // Column: fastest in the middle, so it rises as a tapering spike and then slumps
-        for (let i = 0; i < 260 * scale; i++) {
+    // Water plume from anything hitting the sea at speed. A shell's energy throws up a column that keeps
+    // building for a fraction of a second (water is still being thrown up as it rises), hangs, spreads into a
+    // ragged head and collapses as a curtain of spray, leaving a skirt of white water and mist drifting
+    // downwind. H: height (m), R: column radius, k: particle scale, n: density (1 = a 5" shell's)
+    plume(x, y, z, H, R, k, n = 1) {
+        const vMax = Math.sqrt(2 * GRAVITY * H);
+        const wx = Sea.wind.x * 2.5, wz = Sea.wind.y * 2.5;
+        const floor = y - 0.3;
+        const W = 0.95;
+        // Column: built over ~0.3 s, fastest in the middle so it rises as a tapering spike
+        for (let i = 0; i < 300 * n; i++) {
             const a = Math.random() * Math.PI * 2, f = Math.sqrt(Math.random()), rr = f * R;
-            const vy = vMax * (1 - 0.8 * f * f) * rnd(0.7, 1.04);
-            const shade = rnd(0.86, 1);
-            sprayFx.emit({ x: x + Math.cos(a) * rr, y: y + rnd(0, 0.8), z: z + Math.sin(a) * rr,
-                vx: Math.cos(a) * rnd(0.2, 1.8) * k, vy, vz: Math.sin(a) * rnd(0.2, 1.8) * k,
-                life: 2 * vy / GRAVITY + rnd(0.4, 1.0), s0: rnd(0.9, 1.6) * k, s1: rnd(2.6, 4.4) * k,
-                r: r * shade, g: g * shade, b: b * shade, a: 0.8, fade: 1.2, drag: 0.1, grav: GRAVITY, floor });
+            const vy = vMax * (1 - 0.75 * f * f) * rnd(0.72, 1.05);
+            const shade = rnd(0.84, 1) * W;
+            sprayFx.emit({ x: x + Math.cos(a) * rr, y: y + rnd(0, 0.6), z: z + Math.sin(a) * rr, delay: Math.pow(Math.random(), 1.6) * 0.3,
+                vx: Math.cos(a) * rnd(0.3, 2.2) * k, vy, vz: Math.sin(a) * rnd(0.3, 2.2) * k,
+                life: 2 * vy / GRAVITY + rnd(0.6, 1.4), s0: rnd(1.0, 1.8) * k, s1: rnd(3.2, 5.5) * k,
+                r: shade, g: shade, b: shade * 1.02, a: 0.85, fade: 1.1, drag: 0.22, grav: GRAVITY, floor });
+        }
+        // Head: the top of the column bursts outward into a ragged crown of spray
+        for (let i = 0; i < 90 * n; i++) {
+            const a = Math.random() * Math.PI * 2, sp = rnd(2, 7) * k;
+            const vy = vMax * rnd(0.82, 1.0);
+            sprayFx.emit({ x, y: y + 0.5, z, delay: rnd(0, 0.12), vx: Math.cos(a) * sp, vy, vz: Math.sin(a) * sp,
+                life: 2 * vy / GRAVITY + rnd(0.5, 1.2), s0: rnd(1.4, 2.4) * k, s1: rnd(4.5, 7.5) * k,
+                r: W, g: W, b: W, a: 0.7, fade: 1.3, drag: 0.5, grav: GRAVITY, floor });
         }
         // Crown: droplets flung up and out at the moment of impact
-        for (let i = 0; i < 120 * scale; i++) {
+        for (let i = 0; i < 110 * n; i++) {
             const a = Math.random() * Math.PI * 2, sp = rnd(5, 15) * k;
-            sprayFx.emit({ x, y: y + 0.3, z, vx: Math.cos(a) * sp, vy: rnd(7, 19) * k, vz: Math.sin(a) * sp,
-                life: rnd(1.4, 3.0), s0: rnd(0.3, 0.6) * k, s1: rnd(0.7, 1.3) * k,
-                r, g, b, a: 0.95, fade: 0.8, drag: 0.3, grav: GRAVITY, floor });
+            sprayFx.emit({ x, y: y + 0.3, z, vx: Math.cos(a) * sp, vy: rnd(0.35, 0.8) * vMax, vz: Math.sin(a) * sp,
+                life: rnd(1.4, 3.0) * Math.sqrt(H / 30), s0: rnd(0.3, 0.6) * k, s1: rnd(0.7, 1.4) * k,
+                r: W, g: W, b: W, a: 0.95, fade: 0.8, drag: 0.3, grav: GRAVITY, floor });
         }
-        // Base surge: a low ring of spray rolling outwards
-        for (let i = 0; i < 60 * scale; i++) {
+        // Base surge: a low ring of white water rolling outwards
+        for (let i = 0; i < 70 * n; i++) {
             const a = Math.random() * Math.PI * 2, sp = rnd(4, 11) * k;
-            sprayFx.emit({ x: x + Math.cos(a) * R, y: y + 0.4, z: z + Math.sin(a) * R, vx: Math.cos(a) * sp, vy: rnd(0.8, 2.6), vz: Math.sin(a) * sp,
-                life: rnd(1.6, 3.0), s0: 1.6 * k, s1: rnd(4, 6.5) * k, r: 0.9, g: 0.94, b: 0.96, a: 0.55, drag: 1.4, grav: 1.5 });
+            sprayFx.emit({ x: x + Math.cos(a) * R, y: y + 0.4, z: z + Math.sin(a) * R, vx: Math.cos(a) * sp, vy: rnd(0.8, 2.8) * k, vz: Math.sin(a) * sp,
+                life: rnd(1.6, 3.2), s0: 1.6 * k, s1: rnd(4.5, 7) * k, r: 0.92, g: 0.95, b: 0.97, a: 0.55, drag: 1.4, grav: 1.5 });
         }
-        // Mist left hanging as the column falls, drifting downwind
-        for (let i = 0; i < 40 * scale; i++) {
-            const hgt = rnd(0.05, 0.8) * H;
-            smokeFx.emit({ x: x + randn() * R, y: y + hgt, z: z + randn() * R, vx: wx + randn() * 0.6, vy: rnd(-0.5, 0.4), vz: wz + randn() * 0.6,
-                delay: rnd(0.8, 2.4) * k, life: rnd(4, 8), s0: rnd(3, 5) * k, s1: rnd(9, 15) * k,
-                r: lerp(0.92, r, 0.5), g: lerp(0.95, g, 0.5), b: lerp(0.97, b, 0.5), a: 0.22, fade: 1.6, drag: 1.2, grav: 0.1 });
+        // Mist: hangs at every height of the column as it falls, then drifts off downwind
+        for (let i = 0; i < 55 * n; i++) {
+            const hgt = Math.pow(Math.random(), 0.7) * H;
+            smokeFx.emit({ x: x + randn() * R * 1.2, y: y + hgt, z: z + randn() * R * 1.2, vx: wx + randn() * 0.7, vy: rnd(-0.6, 0.3), vz: wz + randn() * 0.7,
+                delay: rnd(0.5, 2.0) * Math.sqrt(H / 30), life: rnd(4, 9), s0: rnd(3, 5) * k, s1: rnd(10, 18) * k,
+                r: 0.93, g: 0.95, b: 0.97, a: 0.24, fade: 1.6, drag: 1.2, grav: 0.12 });
         }
         // Foam patch left on the water
-        for (let i = 0; i < 26 * scale; i++) {
-            const a = Math.random() * Math.PI * 2, rr = rnd(0, 2.2) * R;
+        for (let i = 0; i < 26 * n; i++) {
+            const a = Math.random() * Math.PI * 2, rr = rnd(0, 2.4) * R;
             sprayFx.emit({ x: x + Math.cos(a) * rr, y: y + 0.2, z: z + Math.sin(a) * rr, vx: wx * 0.3 + Math.cos(a) * 0.8, vy: 0, vz: wz * 0.3 + Math.sin(a) * 0.8,
                 delay: rnd(0.6, 1.8), life: rnd(6, 11), s0: rnd(2, 3.5) * k, s1: rnd(5, 8) * k, r: 0.9, g: 0.95, b: 0.97, a: 0.5, fade: 1.2, drag: 0.6, grav: 0 });
         }
+    },
+    // Shell splash: a 5" shell throws water ~30 m up; scale 2.6 is a torpedo. Always white water (tint kept
+    // for callers, not used)
+    splash(x, y, z, tint = WHITE_SPRAY, scale = 1) {
+        FX.plume(x, y, z, 31 * Math.pow(scale, 0.8), 2.3 * Math.sqrt(scale), Math.sqrt(scale), scale);
+    },
+    // 40 mm (big) or 20 mm round into the sea: a high-velocity round still throws a 6-12 m plume
+    aaSplash(x, y, z, big) {
+        FX.plume(x, y, z, big ? rnd(9, 13) : rnd(5.5, 8), big ? 0.65 : 0.45, big ? 0.5 : 0.38, big ? 0.16 : 0.1);
     },
     // Torpedo hit: a towering white column and a fireball
     waterColumn(p) {

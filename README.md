@@ -18,10 +18,10 @@ Screen" runs it fullscreen.
 | Left click | Gun-aim camera: the mouse is captured and orbits the camera round the ship, the crosshair sits fixed in the centre (sub-pixel aim). Click / Space fires, right mouse holds a 3× zoom, wheel sets the distance, X locks, Esc frees the mouse |
 | Right drag / middle drag / wheel | Orbit / pan / zoom the camera (a drag in chase view switches to orbit) |
 | B | Captain's view on the bridge: mouse look, right-click / Z / wheel = binoculars, X locks the target under the reticle |
-| G | Man an AA gun (the 40 mm or 20 mm that best covers the nearest plane). Mouse aims, click / Space fires, wheel or right mouse / Z for a little magnification (up to 2×), R: every mount that bears follows your sight and fires with you, Q / E next gun, X locks the plane in your sight for the 5"/38s, G leaves. The AI captain has the conn and the 5"/38s meanwhile |
-| V | Step out onto the deck yourself (see On foot below); V again returns to the ship view |
+| G | Man an AA gun (the 40 mm or 20 mm that best covers the nearest plane). Mouse aims, click / Space fires, wheel or right mouse / Z for a little magnification (up to 2×), R: every mount that bears follows your sight and fires with you, Q next gun (Shift+Q back), X locks the plane in your sight for the 5"/38s, G leaves. The AI captain has the conn and the 5"/38s meanwhile |
+| E | Step out onto the deck yourself, from any view (see On foot below); E again (with nothing to use in front of you) returns to the ship view |
 | T | Train out a torpedo mount and fire a 5-torpedo spread |
-| Q / E | Move between port wing, open bridge, starboard wing (captain's view) |
+| Q / R | Move between port wing, open bridge, starboard wing (captain's view) |
 | C | Chase / orbit camera (leaves the captain's view or the AA gun) |
 | Esc / P | Pause, settings |
 
@@ -78,12 +78,13 @@ Your A / D still override the rudder while held. If you go over the side with no
 you and stops (man overboard).
 
 ## On foot
-**V** puts you on deck (on the bridge if you were in the captain's view). **WASD** walk, **Shift** run, **Space**
-jumps or climbs a low wall (deckhouses, the bridge, the open bridge on the pilothouse roof), **mouse** looks, **F**
+**E** puts you on deck (on the bridge if you were in the captain's view, beside the gun if you were on one).
+**WASD** walk, **Shift** run, **Space** jumps or climbs a low wall (deckhouses, the bridge, the open bridge on the
+pilothouse roof), **mouse** looks, **E** (or F)
 uses what is in front of you: man the AA gun beside you, take the conn on the bridge, lower the whaleboat at the
 starboard davits. Jump the lifelines to go over the side. In the water: **WASD** swim, **C / Ctrl** dive,
-**Space** rise (watch your breath), **F** climbs a scramble net back aboard or into the whaleboat; swim to an
-island and you wade ashore. In the boat: **W / S** row, **A / D** turn, **Shift** pull hard, **F** over the side.
+**Space** rise (watch your breath), **E** climbs a scramble net back aboard or into the whaleboat; swim to an
+island and you wade ashore. In the boat: **W / S** row, **A / D** turn, **Shift** pull hard, **E** over the side.
 
 When she goes down the whaleboat is put in the water. Stay aboard (on deck or on the bridge) and you go down with
 her: the light fails as you sink, the murk closes in, air pours out of the hull, she settles on the bottom
@@ -91,9 +92,19 @@ her: the light fails as you sink, the murk closes in, air pours out of the hull,
 "Swim for it" puts you in the water beside the wreck with the boat close by. Keyboard and mouse only.
 
 ## Destruction
-Hits throw wreckage (plate, beams, machinery) that tumbles, trails smoke, splashes, floats and sinks; shell holes
-and soot are torn into the hull and deckhouse sides where they struck. Badly hurt enemy warships can have a gun
-mount blown clean off, and a ship that blows up throws out a storm of debris.
+- **Holes:** shells and torpedoes cut real, jagged holes through the plating (scorched round the edges; you see
+  the dark inside of the hull through them), in every ship's own frame so they roll with her.
+- **Dents:** each hit pushes the plating in round it, a crumpled crater in the mesh itself.
+- **Sag and breaking:** damage to the keel (low and amidships hurts most) bends the whole hull, ends rising. Enough
+  of it breaks her in two: a torpedo amidships can do it to a destroyer, two to the Fletcher, and an enemy
+  warship that blows up often goes in two. The halves pivot about the torn break, ends climbing out of the water,
+  and go down fast.
+- **Wreckage:** torn plate, beams, machinery, lockers, planks, drums and life rings fly out of every hit, tumble and
+  smoke. In the water, wood, drums, floats and anything with air trapped in it float for a minute or two: they sit
+  at their own waterline, lie along the wave and drift downwind. Steel goes down after a moment, tumbling into the
+  murk until it's lost from sight. Badly hurt warships can have a gun mount blown clean off.
+- **Splashes:** a 5" shell throws a ~30 m white column that keeps building, spreads, collapses and leaves mist;
+  40 mm and 20 mm rounds throw 9-13 m and 6-8 m plumes.
 
 ## Sky
 Stars are individual points (about 14,000, with a Milky Way band and its dark rift) drawn at screen resolution,
