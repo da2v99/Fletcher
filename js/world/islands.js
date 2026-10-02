@@ -1296,10 +1296,10 @@ const Islands = (() => {
         return null;
     }
     const IJN25 = { color: [0.55, 1.0, 0.6], drag: 3.4e-4, life: 4.2, size: 1.1,
-        test: tracerHitsPlayer, onHit: (h, p) => { FX.spark(p, 8); if (!playerDmg.sinking) playerDmg.hull -= 0.05; },
+        test: tracerHitsPlayer, onHit: (h, p, prev) => { FX.spark(p, 8); Wreck.bullet(myShip, prev, p, 0.26); if (!playerDmg.sinking) playerDmg.hull -= 0.05; },
         burst: p => FX.flak(p, 0.22) };
     const IJNMG = { color: [0.95, 0.95, 0.8], drag: 6e-4, life: 2.6, size: 0.5,
-        test: tracerHitsPlayer, onHit: (h, p) => { FX.spark(p, 3); if (!playerDmg.sinking) playerDmg.hull -= 0.006; } };
+        test: tracerHitsPlayer, onHit: (h, p, prev) => { FX.spark(p, 3); Wreck.bullet(myShip, prev, p, 0.09); if (!playerDmg.sinking) playerDmg.hull -= 0.006; } };
 
     function shipAim(from, speed, out) {
         const d = from.distanceTo(phys.pos), tof = d / speed;

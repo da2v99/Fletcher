@@ -142,11 +142,11 @@ const Game = {
 
     update(dt) {
         if (playerDmg.sinking && !this.over && playerDmg.sinkT > 9) {
-            // Still in the world (on deck, in the water or the boat): no game-over screen, Esc for the menu
-            if (Person.active) {
-                this.over = true;
-                hudMessage(`USS Fletcher is lost. Final score ${this.score.toLocaleString()}. Esc for the menu.`, 'alert');
-            } else this.gameOver();
+            // You're still in the world (on deck, in the water or in the boat): no game-over screen, play on;
+            // Esc has the menu and Restart
+            this.over = true;
+            if (!Person.active) Person.onShipSinking();
+            hudMessage(`USS Fletcher is lost. Final score ${this.score.toLocaleString()}. Esc: menu or restart.`, 'alert');
         }
         if (!this.running) return;
         this.phaseT -= dt;
@@ -225,12 +225,12 @@ const Game = {
     },
 
     onPlayerSinking() {
+        Person.onShipSinking();   // on your feet wherever you were (bridge, gun, deck): you play on
         AA.leave();
         this.running = false;
         this.hostile = false;
         drive.order = STOP_IDX;
         drive.cmd = null;
-        Person.onShipSinking();   // on the bridge or on deck: you stay aboard as she goes
         if (Person.active) return;
         if (captain.active) setCaptain(false);
         if (document.pointerLockElement) document.exitPointerLock();

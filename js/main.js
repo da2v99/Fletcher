@@ -237,6 +237,7 @@ function animate() {
     Underwater.update(realDt, simTime);
 
     Wreck.update();
+    GunDrive.frame();
     Gfx.render(realDt * 1000, simTime);
     checkShaders();
     drawOverlay();

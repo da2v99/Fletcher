@@ -3,56 +3,73 @@
 // alpha a, drag, grav; optional: delay (s before it appears), fade (alpha fall-off power, default 2),
 // floor (a y it can't fall through: it stops there and fades out quickly, e.g. spray landing on the sea).
 
-// Sprite textures: 'soft' round glow (fire), 'puff' lumpy cloud (smoke, mist), 'spray' grainy droplets (water)
+// Sprite textures: 'soft' round glow (fire), 'puff' lumpy cloud (smoke, mist), 'spray' grainy droplets (water).
+// Each is a 2 x 2 atlas of different random draws, and every particle picks one and a rotation of its own, so
+// no two sprites in a splash or a smoke column look alike.
 function particleTexture(kind) {
     const N = 128, c = document.createElement('canvas');
-    c.width = c.height = N;
+    c.width = c.height = N * 2;
     const ctx = c.getContext('2d');
+    let ox = 0, oy = 0;
     const blob = (x, y, r, a) => {
-        const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+        const g = ctx.createRadialGradient(ox + x, oy + y, 0, ox + x, oy + y, r);
         g.addColorStop(0, `rgba(255,255,255,${a})`);
         g.addColorStop(1, 'rgba(255,255,255,0)');
         ctx.fillStyle = g;
-        ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(ox + x, oy + y, r, 0, Math.PI * 2); ctx.fill();
     };
-    if (kind === 'soft') {
-        const g = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
-        g.addColorStop(0, 'rgba(255,255,255,1)');
-        g.addColorStop(0.45, 'rgba(255,255,255,0.55)');
-        g.addColorStop(1, 'rgba(255,255,255,0)');
-        ctx.fillStyle = g;
-        ctx.fillRect(0, 0, N, N);
-    } else if (kind === 'puff') {
-        blob(64, 64, 40, 0.5);
-        for (let i = 0; i < 16; i++) {
-            const a = Math.random() * Math.PI * 2, d = Math.random() * 28;
-            blob(64 + Math.cos(a) * d, 64 + Math.sin(a) * d, 14 + Math.random() * 18, 0.35);
+    for (let cell = 0; cell < 4; cell++) {
+        ox = (cell % 2) * N; oy = Math.floor(cell / 2) * N;
+        ctx.save();
+        ctx.beginPath(); ctx.rect(ox, oy, N, N); ctx.clip();
+        if (kind === 'soft') {
+            const g = ctx.createRadialGradient(ox + 64, oy + 64, 0, ox + 64, oy + 64, 64);
+            g.addColorStop(0, 'rgba(255,255,255,1)');
+            g.addColorStop(0.45, 'rgba(255,255,255,0.55)');
+            g.addColorStop(1, 'rgba(255,255,255,0)');
+            ctx.fillStyle = g;
+            ctx.fillRect(ox, oy, N, N);
+        } else if (kind === 'puff') {
+            blob(64, 64, 34 + Math.random() * 10, 0.5);
+            for (let i = 0; i < 14 + cell * 3; i++) {
+                const a = Math.random() * Math.PI * 2, d = Math.random() * 28;
+                blob(64 + Math.cos(a) * d, 64 + Math.sin(a) * d, 10 + Math.random() * 20, 0.3 + Math.random() * 0.12);
+            }
+        } else {
+            // Spray: a denser core or a loose sheet of drops, streaks for the ones flung fast
+            blob(64 + (Math.random() - 0.5) * 10, 64 + (Math.random() - 0.5) * 10, 22 + Math.random() * 16, 0.3 + Math.random() * 0.25);
+            const n = 50 + cell * 25;
+            for (let i = 0; i < n; i++) {
+                const a = Math.random() * Math.PI * 2, d = Math.pow(Math.random(), 0.6 + cell * 0.15) * 56;
+                const x = 64 + Math.cos(a) * d, y = 64 + Math.sin(a) * d;
+                if (cell === 3 && Math.random() < 0.3) {
+                    ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+                    ctx.lineWidth = 1 + Math.random() * 1.5;
+                    ctx.beginPath(); ctx.moveTo(ox + x, oy + y); ctx.lineTo(ox + x + Math.cos(a) * 8, oy + y + Math.sin(a) * 8); ctx.stroke();
+                } else blob(x, y, 1.5 + Math.random() * 5.5 * (1 - d / 64), 0.6 + Math.random() * 0.35);
+            }
         }
-    } else {
-        blob(64, 64, 34, 0.45);
-        for (let i = 0; i < 90; i++) {
-            const a = Math.random() * Math.PI * 2, d = Math.pow(Math.random(), 0.7) * 54;
-            blob(64 + Math.cos(a) * d, 64 + Math.sin(a) * d, 2 + Math.random() * 5 * (1 - d / 64), 0.9);
-        }
+        // Fade the edges so no square corners show
+        ctx.globalCompositeOperation = 'destination-in';
+        const e = ctx.createRadialGradient(ox + 64, oy + 64, 36, ox + 64, oy + 64, 63);
+        e.addColorStop(0, 'rgba(0,0,0,1)');
+        e.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = e;
+        ctx.fillRect(ox, oy, N, N);
+        ctx.restore();
     }
-    // Fade the edges so no square corners show
-    ctx.globalCompositeOperation = 'destination-in';
-    const e = ctx.createRadialGradient(64, 64, 40, 64, 64, 64);
-    e.addColorStop(0, 'rgba(0,0,0,1)');
-    e.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = e;
-    ctx.fillRect(0, 0, N, N);
     return new THREE.CanvasTexture(c);
 }
 
 function createParticleSystem(maxCount, blending, texture = 'soft') {
     const geo = new THREE.BufferGeometry();
     const pos = new Float32Array(maxCount * 3), col = new Float32Array(maxCount * 3);
-    const size = new Float32Array(maxCount), alpha = new Float32Array(maxCount);
+    const size = new Float32Array(maxCount), alpha = new Float32Array(maxCount), pvar = new Float32Array(maxCount);
     geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     geo.setAttribute('pcolor', new THREE.BufferAttribute(col, 3));
     geo.setAttribute('psize', new THREE.BufferAttribute(size, 1));
     geo.setAttribute('palpha', new THREE.BufferAttribute(alpha, 1));
+    geo.setAttribute('pvar', new THREE.BufferAttribute(pvar, 1));   // which sprite and which rotation
     const mat = new THREE.ShaderMaterial({
         // Fog: the scene's own colour object (shared, so it follows the weather and the view) and density
         uniforms: { map: { value: particleTexture(texture) }, scale: { value: 800 }, fogCol: { value: scene.fog.color }, fogDen: { value: 0 },
@@ -61,13 +78,17 @@ function createParticleSystem(maxCount, blending, texture = 'soft') {
             attribute vec3 pcolor;
             attribute float psize;
             attribute float palpha;
+            attribute float pvar;
             uniform float scale;
             uniform float fogDen;
             varying vec3 vC;
             varying float vA;
             varying float vFog;
+            varying vec3 vSpr;   // sprite: cos, sin of its rotation, atlas cell
             void main() {
                 vC = pcolor; vA = palpha;
+                float ang = pvar * 6.2831853;
+                vSpr = vec3(cos(ang), sin(ang), floor(fract(pvar * 7.31) * 4.0));
                 vec4 mv = modelViewMatrix * vec4(position, 1.0);
                 float fd = -mv.z * fogDen;
                 vFog = 1.0 - exp(-fd * fd);
@@ -82,8 +103,13 @@ function createParticleSystem(maxCount, blending, texture = 'soft') {
             varying vec3 vC;
             varying float vA;
             varying float vFog;
+            varying vec3 vSpr;
             void main() {
-                float a = texture2D(map, gl_PointCoord).a * vA;
+                vec2 q = gl_PointCoord - 0.5;
+                q = vec2(vSpr.x * q.x - vSpr.y * q.y, vSpr.y * q.x + vSpr.x * q.y) + 0.5;
+                if (q.x < 0.0 || q.x > 1.0 || q.y < 0.0 || q.y > 1.0) discard;
+                vec2 uv = (clamp(q, 0.01, 0.99) + vec2(mod(vSpr.z, 2.0), floor(vSpr.z / 2.0))) * 0.5;
+                float a = texture2D(map, uv).a * vA;
                 if (additive > 0.5) a *= 1.0 - vFog;   // glows fade out; smoke and spray take on the haze
                 if (a < 0.003) discard;
                 gl_FragColor = vec4(additive > 0.5 ? vC : mix(vC, fogCol, vFog), a);
@@ -107,7 +133,7 @@ function createParticleSystem(maxCount, blending, texture = 'soft') {
                 const k = 1 / Math.sqrt(keep);
                 p.s0 *= k; p.s1 *= k;
             }
-            if (list.length < maxCount) list.push(Object.assign({ age: -(p.delay || 0) }, p));
+            if (list.length < maxCount) list.push(Object.assign({ age: -(p.delay || 0), v: Math.random() }, p));
         },
         clear() { list.length = 0; },
         update(dt, scaleValue) {
@@ -134,6 +160,7 @@ function createParticleSystem(maxCount, blending, texture = 'soft') {
                 if (p.r1 === undefined) { col[n * 3] = p.r; col[n * 3 + 1] = p.g; col[n * 3 + 2] = p.b; }
                 else { const c = Math.min(1, t * (p.cs || 1)); col[n * 3] = lerp(p.r, p.r1, c); col[n * 3 + 1] = lerp(p.g, p.g1, c); col[n * 3 + 2] = lerp(p.b, p.b1, c); }
                 size[n] = lerp(p.s0, p.s1, Math.sqrt(t));
+                pvar[n] = p.v;
                 alpha[n] = p.a * Math.min(1, t * 12) * Math.pow(1 - t, p.fade || 2);
                 n++;
             }
@@ -142,8 +169,8 @@ function createParticleSystem(maxCount, blending, texture = 'soft') {
             if (n > 0) {
                 const A = geo.attributes;
                 A.position.updateRange.count = n * 3; A.pcolor.updateRange.count = n * 3;
-                A.psize.updateRange.count = n; A.palpha.updateRange.count = n;
-                A.position.needsUpdate = A.pcolor.needsUpdate = A.psize.needsUpdate = A.palpha.needsUpdate = true;
+                A.psize.updateRange.count = n; A.palpha.updateRange.count = n; A.pvar.updateRange.count = n;
+                A.position.needsUpdate = A.pcolor.needsUpdate = A.psize.needsUpdate = A.palpha.needsUpdate = A.pvar.needsUpdate = true;
             }
         }
     };
@@ -155,7 +182,7 @@ let shockGeo, shockMat;
 
 function initEffects() {
     smokeFx = createParticleSystem(9000, THREE.NormalBlending, 'puff');
-    sprayFx = createParticleSystem(22000, THREE.NormalBlending, 'spray');
+    sprayFx = createParticleSystem(40000, THREE.NormalBlending, 'spray');
     fireFx = createParticleSystem(5000, THREE.AdditiveBlending);
     scene.add(smokeFx.points, sprayFx.points, fireFx.points);
     muzzleLight = new THREE.PointLight(0xffa655, 0, 90, 2);
@@ -187,68 +214,91 @@ function updateEffects(dt) {
 const WHITE_SPRAY = [0.93, 0.96, 0.98];
 
 const FX = {
-    // Water plume from anything hitting the sea at speed. A shell's energy throws up a column that keeps
-    // building for a fraction of a second (water is still being thrown up as it rises), hangs, spreads into a
-    // ragged head and collapses as a curtain of spray, leaving a skirt of white water and mist drifting
-    // downwind. H: height (m), R: column radius, k: particle scale, n: density (1 = a 5" shell's)
+    // Water plume from anything hitting the sea at speed. The column keeps building for a fraction of a second
+    // (water is still being thrown up as it rises), hangs, spreads into a ragged head and collapses as a curtain
+    // of spray, leaving a skirt of white water and mist drifting downwind. No two are alike: each has its own
+    // height, one to four jets of different heights, a lean with the wind, a lopsided crown and its own pace.
+    // H: height (m), R: column radius, k: particle scale, n: density (1 = a 5" shell's)
     plume(x, y, z, H, R, k, n = 1) {
-        const vMax = Math.sqrt(2 * GRAVITY * H);
+        H *= rnd(0.8, 1.15);
+        const g = GRAVITY, floor = y - 0.3, W = rnd(0.9, 0.98);
+        const tall = Math.sqrt(H / 30);                                  // sprites and girth grow with the column
+        R *= 0.75 + 0.55 * tall;
+        const vTop = Math.sqrt(2 * g * H) * 1.05;                        // a little over, for the air drag
+        const lean = Math.min(0.09, 0.02 + Math.random() * 0.05);
+        const lx = (Sea.wind.x * 0.6 + randn() * 0.5) * lean, lz = (Sea.wind.y * 0.6 + randn() * 0.5) * lean;
+        const build = rnd(0.2, 0.45);
+        // Jets: the main one and up to three lesser ones beside it
+        const nj = n >= 0.5 ? 1 + Math.floor(Math.random() * 3.3) : (Math.random() < 0.45 ? 2 : 1);
+        const jets = [];
+        for (let j = 0; j < nj; j++) {
+            const a = Math.random() * Math.PI * 2, d = j ? rnd(0.5, 1.5) * R : 0;
+            jets.push({ x: x + Math.cos(a) * d, z: z + Math.sin(a) * d, h: j ? rnd(0.35, 0.85) : 1, r: R * (j ? rnd(0.45, 0.8) : 1), w: j ? rnd(0.2, 0.45) : 1 });
+        }
+        const wsum = jets.reduce((s, j) => s + j.w, 0);
+        const pick = () => { let r = Math.random() * wsum; for (const j of jets) { r -= j.w; if (r <= 0) return j; } return jets[0]; };
         const wx = Sea.wind.x * 2.5, wz = Sea.wind.y * 2.5;
-        const floor = y - 0.3;
-        const W = 0.95;
-        // Column: built over ~0.3 s, fastest in the middle so it rises as a tapering spike
-        for (let i = 0; i < 300 * n; i++) {
-            const a = Math.random() * Math.PI * 2, f = Math.sqrt(Math.random()), rr = f * R;
-            const vy = vMax * (1 - 0.75 * f * f) * rnd(0.72, 1.05);
-            const shade = rnd(0.84, 1) * W;
-            sprayFx.emit({ x: x + Math.cos(a) * rr, y: y + rnd(0, 0.6), z: z + Math.sin(a) * rr, delay: Math.pow(Math.random(), 1.6) * 0.3,
-                vx: Math.cos(a) * rnd(0.3, 2.2) * k, vy, vz: Math.sin(a) * rnd(0.3, 2.2) * k,
-                life: 2 * vy / GRAVITY + rnd(0.6, 1.4), s0: rnd(1.0, 1.8) * k, s1: rnd(3.2, 5.5) * k,
-                r: shade, g: shade, b: shade * 1.02, a: 0.85, fade: 1.1, drag: 0.22, grav: GRAVITY, floor });
+        // Column(s): fastest in the middle, so each rises as a tapering spike
+        for (let i = 0; i < 480 * n; i++) {
+            const J = pick(), a = Math.random() * Math.PI * 2, f = Math.sqrt(Math.random()), rr = f * J.r;
+            const vy = vTop * Math.sqrt(J.h) * (1 - 0.72 * f * f) * rnd(0.7, 1.04);
+            const shade = rnd(0.82, 1) * W;
+            sprayFx.emit({ x: J.x + Math.cos(a) * rr, y: y + rnd(0, 0.6), z: J.z + Math.sin(a) * rr, delay: Math.pow(Math.random(), 1.5) * build,
+                vx: Math.cos(a) * rnd(0.3, 2.4) * k + lx * vy, vy, vz: Math.sin(a) * rnd(0.3, 2.4) * k + lz * vy,
+                life: 2 * vy / g + rnd(0.6, 1.6), s0: rnd(1.5, 2.6) * k * tall, s1: rnd(4.5, 8.5) * k * tall,
+                r: shade, g: shade, b: shade * 1.02, a: rnd(0.75, 0.95), fade: rnd(0.9, 1.4), drag: 0.03, grav: g, floor });
         }
-        // Head: the top of the column bursts outward into a ragged crown of spray
+        // Head: the top of the main column bursts outward into a ragged crown of spray
         for (let i = 0; i < 90 * n; i++) {
-            const a = Math.random() * Math.PI * 2, sp = rnd(2, 7) * k;
-            const vy = vMax * rnd(0.82, 1.0);
-            sprayFx.emit({ x, y: y + 0.5, z, delay: rnd(0, 0.12), vx: Math.cos(a) * sp, vy, vz: Math.sin(a) * sp,
-                life: 2 * vy / GRAVITY + rnd(0.5, 1.2), s0: rnd(1.4, 2.4) * k, s1: rnd(4.5, 7.5) * k,
-                r: W, g: W, b: W, a: 0.7, fade: 1.3, drag: 0.5, grav: GRAVITY, floor });
+            const a = Math.random() * Math.PI * 2, sp = rnd(2, 8) * k * tall;
+            const vy = vTop * rnd(0.8, 1.0);
+            sprayFx.emit({ x, y: y + 0.5, z, delay: rnd(0, build * 0.5), vx: Math.cos(a) * sp + lx * vy, vy, vz: Math.sin(a) * sp + lz * vy,
+                life: 2 * vy / g + rnd(0.5, 1.4), s0: rnd(1.4, 2.6) * k * tall, s1: rnd(4.5, 8.5) * k * tall,
+                r: W, g: W, b: W, a: 0.65, fade: 1.3, drag: 0.12, grav: g, floor });
         }
-        // Crown: droplets flung up and out at the moment of impact
+        // Crown: droplets flung up and out at impact, thrown harder to one side
+        const cb = Math.random() * Math.PI * 2, cs = rnd(0, 0.7);
         for (let i = 0; i < 110 * n; i++) {
-            const a = Math.random() * Math.PI * 2, sp = rnd(5, 15) * k;
-            sprayFx.emit({ x, y: y + 0.3, z, vx: Math.cos(a) * sp, vy: rnd(0.35, 0.8) * vMax, vz: Math.sin(a) * sp,
-                life: rnd(1.4, 3.0) * Math.sqrt(H / 30), s0: rnd(0.3, 0.6) * k, s1: rnd(0.7, 1.4) * k,
-                r: W, g: W, b: W, a: 0.95, fade: 0.8, drag: 0.3, grav: GRAVITY, floor });
+            const a = Math.random() * Math.PI * 2, sp = rnd(5, 16) * k * (1 + cs * Math.cos(a - cb)) * Math.min(2, tall);
+            sprayFx.emit({ x, y: y + 0.3, z, vx: Math.cos(a) * sp, vy: rnd(0.25, 0.6) * vTop, vz: Math.sin(a) * sp,
+                life: rnd(1.6, 3.4) * tall, s0: rnd(0.3, 0.7) * k, s1: rnd(0.8, 1.6) * k, r: W, g: W, b: W, a: 0.95, fade: 0.8, drag: 0.25, grav: g, floor });
         }
         // Base surge: a low ring of white water rolling outwards
         for (let i = 0; i < 70 * n; i++) {
-            const a = Math.random() * Math.PI * 2, sp = rnd(4, 11) * k;
-            sprayFx.emit({ x: x + Math.cos(a) * R, y: y + 0.4, z: z + Math.sin(a) * R, vx: Math.cos(a) * sp, vy: rnd(0.8, 2.8) * k, vz: Math.sin(a) * sp,
-                life: rnd(1.6, 3.2), s0: 1.6 * k, s1: rnd(4.5, 7) * k, r: 0.92, g: 0.95, b: 0.97, a: 0.55, drag: 1.4, grav: 1.5 });
+            const a = Math.random() * Math.PI * 2, sp = rnd(4, 12) * k * Math.min(1.6, tall);
+            sprayFx.emit({ x: x + Math.cos(a) * R, y: y + 0.4, z: z + Math.sin(a) * R, delay: rnd(0, 0.4), vx: Math.cos(a) * sp, vy: rnd(0.8, 3) * k, vz: Math.sin(a) * sp,
+                life: rnd(1.8, 3.6), s0: 1.6 * k, s1: rnd(4.5, 8) * k * Math.min(1.6, tall), r: 0.92, g: 0.95, b: 0.97, a: 0.55, drag: 1.3, grav: 1.5 });
+        }
+        // The collapse: a curtain of falling water round the column's foot as it comes down
+        const fall = Math.sqrt(2 * H / g) * 2;
+        for (let i = 0; i < 60 * n; i++) {
+            const a = Math.random() * Math.PI * 2, rr = R * rnd(1, 2.6);
+            sprayFx.emit({ x: x + Math.cos(a) * rr, y: y + rnd(0.2, 0.5) * H, z: z + Math.sin(a) * rr, delay: fall * rnd(0.45, 0.7),
+                vx: Math.cos(a) * rnd(1, 3), vy: rnd(-4, 0), vz: Math.sin(a) * rnd(1, 3), life: rnd(1.5, 3), s0: rnd(2, 3.5) * k * tall, s1: rnd(5, 9) * k * tall,
+                r: W, g: W, b: W, a: 0.5, fade: 1.2, drag: 0.6, grav: g * 0.8, floor });
         }
         // Mist: hangs at every height of the column as it falls, then drifts off downwind
-        for (let i = 0; i < 55 * n; i++) {
+        for (let i = 0; i < 60 * n; i++) {
             const hgt = Math.pow(Math.random(), 0.7) * H;
-            smokeFx.emit({ x: x + randn() * R * 1.2, y: y + hgt, z: z + randn() * R * 1.2, vx: wx + randn() * 0.7, vy: rnd(-0.6, 0.3), vz: wz + randn() * 0.7,
-                delay: rnd(0.5, 2.0) * Math.sqrt(H / 30), life: rnd(4, 9), s0: rnd(3, 5) * k, s1: rnd(10, 18) * k,
-                r: 0.93, g: 0.95, b: 0.97, a: 0.24, fade: 1.6, drag: 1.2, grav: 0.12 });
+            smokeFx.emit({ x: x + randn() * R * 1.4 + lx * hgt, y: y + hgt, z: z + randn() * R * 1.4 + lz * hgt, vx: wx + randn() * 0.8, vy: rnd(-0.7, 0.3), vz: wz + randn() * 0.8,
+                delay: rnd(0.4, 1.0) * fall * 0.5, life: rnd(5, 11), s0: rnd(3, 6) * k * tall, s1: rnd(10, 20) * k * tall,
+                r: 0.93, g: 0.95, b: 0.97, a: rnd(0.16, 0.28), fade: 1.6, drag: 1.2, grav: 0.12 });
         }
         // Foam patch left on the water
         for (let i = 0; i < 26 * n; i++) {
-            const a = Math.random() * Math.PI * 2, rr = rnd(0, 2.4) * R;
+            const a = Math.random() * Math.PI * 2, rr = rnd(0, 2.6) * R * Math.min(1.6, tall);
             sprayFx.emit({ x: x + Math.cos(a) * rr, y: y + 0.2, z: z + Math.sin(a) * rr, vx: wx * 0.3 + Math.cos(a) * 0.8, vy: 0, vz: wz * 0.3 + Math.sin(a) * 0.8,
-                delay: rnd(0.6, 1.8), life: rnd(6, 11), s0: rnd(2, 3.5) * k, s1: rnd(5, 8) * k, r: 0.9, g: 0.95, b: 0.97, a: 0.5, fade: 1.2, drag: 0.6, grav: 0 });
+                delay: rnd(0.6, 2.2), life: rnd(6, 12), s0: rnd(2, 3.5) * k, s1: rnd(5, 9) * k, r: 0.9, g: 0.95, b: 0.97, a: 0.5, fade: 1.2, drag: 0.6, grav: 0 });
         }
     },
-    // Shell splash: a 5" shell throws water ~30 m up; scale 2.6 is a torpedo. Always white water (tint kept
+    // Shell splash: a 5" shell's column ~90 m (scale 2.6 is a torpedo, ~150 m). Always white water (tint kept
     // for callers, not used)
     splash(x, y, z, tint = WHITE_SPRAY, scale = 1) {
-        FX.plume(x, y, z, 31 * Math.pow(scale, 0.8), 2.3 * Math.sqrt(scale), Math.sqrt(scale), scale);
+        FX.plume(x, y, z, Math.min(150, 93 * Math.pow(scale, 0.55)), 2.4 * Math.sqrt(scale), Math.sqrt(scale), scale);
     },
-    // 40 mm (big) or 20 mm round into the sea: a high-velocity round still throws a 6-12 m plume
+    // 40 mm (big) or 20 mm round into the sea: tall, thin plumes, ~30 m and ~20 m
     aaSplash(x, y, z, big) {
-        FX.plume(x, y, z, big ? rnd(9, 13) : rnd(5.5, 8), big ? 0.65 : 0.45, big ? 0.5 : 0.38, big ? 0.16 : 0.1);
+        FX.plume(x, y, z, big ? rnd(27, 36) : rnd(17, 23), big ? 0.75 : 0.5, big ? 0.75 : 0.6, big ? 0.22 : 0.14);
     },
     // Torpedo hit: a towering white column and a fireball
     waterColumn(p) {

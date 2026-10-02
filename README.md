@@ -70,6 +70,11 @@ within a frame or two, so it glides through every in-between angle rather than s
 Sensitivity scales with the field of view, a little more finely at high magnification, and aim is taken along an
 exact ray through the screen centre.
 
+## The 5"/38s against aircraft
+The 5"/38 was a dual-purpose gun: the mounts elevate to 85° and the Mk 37 director computes a lead on aircraft, so
+a plane under the crosshair (or locked) gets VT proximity-fuzed shells that burst as they pass it. The AI captain
+fires them at attacking planes too, as the real ships did; they were the most effective heavy AA of the war.
+
 ## The AI captain
 While you are on an AA gun or on foot, the captain has the conn: closes surface contacts and fights them
 broadside on with a weave, combs torpedo tracks, swings hard under diving bombers, keeps off the shoals, and fights
@@ -86,15 +91,22 @@ starboard davits. Jump the lifelines to go over the side. In the water: **WASD**
 **Space** rise (watch your breath), **E** climbs a scramble net back aboard or into the whaleboat; swim to an
 island and you wade ashore. In the boat: **W / S** row, **A / D** turn, **Shift** pull hard, **E** over the side.
 
-When she goes down the whaleboat is put in the water. Stay aboard (on deck or on the bridge) and you go down with
-her: the light fails as you sink, the murk closes in, air pours out of the hull, she settles on the bottom
-(70 m) and the fish come to look; **Space** lets go and you swim for the surface. From the game-over screen,
-"Swim for it" puts you in the water beside the wreck with the boat close by. Keyboard and mouse only.
+When she goes down you play on: you're on your feet wherever you were (on the bridge, beside your gun, or on
+deck), the whaleboat is put in the water, and there's no game-over screen (Esc has the menu and Restart). Stay
+aboard and you go down with her: the light fails as you sink, the murk closes in, air pours out of the hull, she settles on the bottom
+(70 m) and the fish come to look; **Space** lets go and you swim for the surface. Keyboard and mouse only.
 
 ## Destruction
+- **Where it struck:** every hit is found on the actual mesh, along the round's path, so the damage lands exactly
+  there: hull, deckhouse, funnel, bridge, a gun shield.
 - **Holes:** shells and torpedoes cut real, jagged holes through the plating (scorched round the edges; you see
-  the dark inside of the hull through them), in every ship's own frame so they roll with her.
+  the dark inside of the hull through them), in every ship's own frame so they roll with her. Thin superstructure
+  plating loses whole chunks; the hull's side plating is holed and pushed in.
 - **Dents:** each hit pushes the plating in round it, a crumpled crater in the mesh itself.
+- **Bullet holes:** 20 mm, 40 mm, shore 25 mm and the Zeros' guns pock the plating with holes chipped back to
+  bare steel.
+- **Wrecks:** a ship going down (and both halves of a broken one) still stops rounds and torpedoes, and keeps
+  tearing apart under fire.
 - **Sag and breaking:** damage to the keel (low and amidships hurts most) bends the whole hull, ends rising. Enough
   of it breaks her in two: a torpedo amidships can do it to a destroyer, two to the Fletcher, and an enemy
   warship that blows up often goes in two. The halves pivot about the torn break, ends climbing out of the water,
@@ -103,8 +115,16 @@ her: the light fails as you sink, the murk closes in, air pours out of the hull,
   smoke. In the water, wood, drums, floats and anything with air trapped in it float for a minute or two: they sit
   at their own waterline, lie along the wave and drift downwind. Steel goes down after a moment, tumbling into the
   murk until it's lost from sight. Badly hurt warships can have a gun mount blown clean off.
-- **Splashes:** a 5" shell throws a ~30 m white column that keeps building, spreads, collapses and leaves mist;
-  40 mm and 20 mm rounds throw 9-13 m and 6-8 m plumes.
+- **Splashes:** a 5" shell throws a ~90 m white column that keeps building, spreads, collapses in a curtain of
+  spray and leaves mist; 40 mm and 20 mm rounds throw ~30 m and ~20 m plumes, a torpedo ~150 m. No two are alike:
+  each has its own height, one to four jets, a lean with the wind and a lopsided crown, and every spray sprite has
+  its own shape and rotation.
+
+## Sound
+All synthesised. The 5"/38s boom; the 40 mm Bofors "pom" and the 20 mm Oerlikon bark have a crack, muzzle blast,
+breech clank and a tail rolling off over the water. The mounts can be heard training: the 5"/38s' electric-hydraulic
+drive (a hum and a motor whine that climbs with the slewing speed, gear grind, hydraulic hiss), the Bofors' power
+drive, the Oerlikons' creak, and a clunk as each takes up or comes to rest.
 
 ## Sky
 Stars are individual points (about 14,000, with a Milky Way band and its dark rift) drawn at screen resolution,

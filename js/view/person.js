@@ -503,7 +503,7 @@ const Person = (() => {
         const lines = [];
         if (st.action) lines.push(st.action.label);
         if (st.hint) lines.push(st.hint);
-        if (!Game.running && playerDmg.sinking) lines.push(`USS Fletcher is lost · final score ${Game.score.toLocaleString()} · Esc for the menu`);
+        if (!Game.running && playerDmg.sinking && playerDmg.sinkT < 25) lines.push(`USS Fletcher is going down · score ${Game.score.toLocaleString()} · Esc: menu / restart`);
         lines.forEach((t, i) => {
             const y = h * 0.66 + i * 20;
             ctx.fillStyle = 'rgba(0,0,0,0.55)';
@@ -535,9 +535,12 @@ const Person = (() => {
     }
 
     // The ship is going down: launch the whaleboat alongside for anyone who wants it
+    // She's going down: you're on your feet wherever you were (on the bridge, beside your gun, on deck) and keep
+    // going: stay with her, jump, swim, take to the whaleboat. The boat is put in the water alongside.
     function onShipSinking() {
-        if (captain.active) enter();   // you stay on the bridge as she goes
+        if (!st.active) enter();
         if (!boat.launched) launchBoat(true);
+        hudMessage('ABANDON SHIP! The whaleboat is in the water to starboard. Jump the rail and swim for it, or stay with her.', 'alert');
     }
 
     // From the game-over screen: in the water beside the wreck, the whaleboat close by

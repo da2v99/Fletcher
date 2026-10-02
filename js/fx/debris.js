@@ -301,6 +301,7 @@ const HullDamage = (() => {
             polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4
         });
         const m = new THREE.Mesh(new THREE.PlaneGeometry(size, size), mat);
+        m.name = 'decal';
         m.position.copy(local).addScaledVector(normal, 0.03);
         m.lookAt(m.position.clone().add(normal));
         m.rotateZ(Math.random() * Math.PI * 2);
@@ -311,7 +312,13 @@ const HullDamage = (() => {
 
     // Our ship: find the hull, deckhouse or deck surface nearest the hit (ship-local), soot it, and tear the
     // hole and dent into the structure there (wreck.js). power: 1 = 5" shell, ~4 = torpedo. Returns keel damage.
-    function onPlayer(local, power = 1) {
+    // from / dir (world): where the round came from, to find the exact spot on the mesh it struck
+    function onPlayer(local, power = 1, from = null, dir = null) {
+        const s = from && Wreck.surfaceHit(myShip, from, dir, 40);
+        if (s) {
+            decal(s.root, s.local.clone().addScaledVector(s.normal, 0.02).add(new THREE.Vector3(0, Math.abs(s.normal.y) > 0.7 ? 0 : 0.6, 0)), s.normal, rnd(2.4, 3.6) * Math.sqrt(power), 'soot');
+            return Wreck.hit(myShip, s.local, s.normal, power);
+        }
         const z = THREE.MathUtils.clamp(local.z, -HALF_L + 2, HALF_L - 3);
         const deck = sheerY(z), side = local.x >= 0 ? 1 : -1;
         const size = rnd(1.6, 2.6) * Math.sqrt(power);
@@ -338,7 +345,12 @@ const HullDamage = (() => {
     }
 
     // Enemy ship: her hull side at the hit's station (the same plan taper the hit test uses)
-    function onEnemy(e, local, power = 1) {
+    function onEnemy(e, local, power = 1, from = null, dir = null) {
+        const s = from && Wreck.surfaceHit(e.obj, from, dir, 40);
+        if (s) {
+            decal(s.root, s.local.clone().addScaledVector(s.normal, 0.02).add(new THREE.Vector3(0, Math.abs(s.normal.y) > 0.7 ? 0 : 0.6, 0)), s.normal, rnd(2.4, 3.6) * Math.sqrt(power), 'soot');
+            return Wreck.hit(e.obj, s.local, s.normal, power);
+        }
         const L = e.model.len, z = THREE.MathUtils.clamp(local.z, -L / 2 + 2, L / 2 - 2);
         const halfLen = L / 2 - (Math.abs(z) > L * 0.3 ? (Math.abs(z) - L * 0.3) * 0.6 : 0);
         const hw = e.model.beam / 2 * (halfLen / (L / 2));

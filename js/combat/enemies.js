@@ -238,17 +238,30 @@ function enemyTorpedoes(e, d, dt) {
 }
 
 // Point-in-hull test for our shells and torpedoes (slack widens the box)
-function enemyHitTest(p, slack = 0) {
+// Is world point p inside this hull (obj: the ship, or the stern half of a broken one)? Returns the ship-local point
+function inHull(e, obj, p, slack) {
+    _ev.copy(p);
+    obj.worldToLocal(_ev);
+    const halfLen = e.model.len / 2 - (Math.abs(_ev.z) > e.model.len * 0.3 ? (Math.abs(_ev.z) - e.model.len * 0.3) * 0.6 : 0);
+    return Math.abs(_ev.z) < e.model.len / 2 && Math.abs(_ev.x) < e.model.beam / 2 * (halfLen / (e.model.len / 2)) + slack &&
+        _ev.y > -e.type.draft - slack && _ev.y < (Math.abs(_ev.z) < e.model.len * 0.3 ? e.model.top : 7) ? _ev : null;
+}
+// wrecks: sinking ships (and both halves of a broken one) still stop rounds
+function enemyHitTest(p, slack = 0, wrecks = false) {
     for (const e of enemies) {
-        if (e.sinking) continue;
+        if (e.sinking && !wrecks) continue;
         const dx = p.x - e.x, dz = p.z - e.z;
-        const r = e.model.len / 2 + 10;
+        const r = e.model.len / 2 + 16;
         if (dx * dx + dz * dz > r * r) continue;
-        _ev.copy(p);
-        e.obj.worldToLocal(_ev);
-        const halfLen = e.model.len / 2 - (Math.abs(_ev.z) > e.model.len * 0.3 ? (Math.abs(_ev.z) - e.model.len * 0.3) * 0.6 : 0);
-        if (Math.abs(_ev.z) < e.model.len / 2 && Math.abs(_ev.x) < e.model.beam / 2 * (halfLen / (e.model.len / 2)) + slack &&
-            _ev.y > -e.type.draft - slack && _ev.y < (Math.abs(_ev.z) < e.model.len * 0.3 ? e.model.top : 7)) return e;
+        const W = e.obj.userData.wreck;
+        if (W && W.broken) {
+            const a = inHull(e, e.obj, p, slack);
+            if (a && a.z > W.cutZ - 1) return e;
+            const b = inHull(e, W.half.root, p, slack);
+            if (b && b.z < W.cutZ + 1) return e;
+            continue;
+        }
+        if (inHull(e, e.obj, p, slack)) return e;
     }
     return null;
 }
@@ -285,15 +298,17 @@ function blowOffMount(e, force = 1) {
     Debris.blowOff(t, v, force);
 }
 
-function onEnemyShellHit(e, p) {
+// dir: the shell's direction of flight, to find exactly where on her it struck
+function onEnemyShellHit(e, p, dir = null) {
     FX.explosion(p);
     playBoom(p, 0.8, 900, 2.2);
-    Game.onHit(e);
     // Wreckage out of the hit, a hole in her side, and now and then a mount blown clean off once she is hurt
     const local = e.obj.worldToLocal(p.clone());
-    const keel = HullDamage.onEnemy(e, local, 1);
+    const keel = HullDamage.onEnemy(e, local, 1, dir ? p.clone().addScaledVector(dir, -15) : null, dir);
     _bo.set(Math.sign(local.x || 1), 0, 0).transformDirection(e.obj.matrixWorld);
     Debris.burst(p, rnd(10, 16), 0.55, { vel: enemyVelocity(e).clone(), dir: _bo.clone() });
+    if (e.sinking) return;   // a wreck going down: torn up further, nothing more to score
+    Game.onHit(e);
     if (keel >= 100 && e.model.len > 40) { damageEnemy(e, e.hp + 1, p); if (!e.obj.userData.wreck.broken) Wreck.breakApart(e.obj); return; }
     if (e.hp < e.type.hp * 0.55 && e.model.len > 40 && Math.random() < 0.18) blowOffMount(e);
     damageEnemy(e, 1, p);
@@ -302,10 +317,13 @@ function onEnemyShellHit(e, p) {
 function onEnemyTorpedoHit(e, p) {
     FX.waterColumn(p);
     playBoom(p, 1.6, 400, 3.5);
-    hudMessage(`Torpedo hit on the ${e.type.name.toLowerCase()}!`, 'good');
+    if (!e.sinking) hudMessage(`Torpedo hit on the ${e.type.name.toLowerCase()}!`, 'good');
     const local = e.obj.worldToLocal(p.clone());
-    const keel = HullDamage.onEnemy(e, local.setY(-0.8), 4);
+    // Into her side below the waterline: cast in toward her centreline to find the plating
+    const at = p.clone().setY(p.y - 0.8), dir = new THREE.Vector3(e.x - p.x, 0, e.z - p.z).normalize();
+    const keel = HullDamage.onEnemy(e, local.setY(-0.8), 4, at.clone().addScaledVector(dir, -12), dir);
     Debris.burst(p.clone().setY(p.y + 2), 34, 1, { vel: enemyVelocity(e).clone(), speed: 1.2, smoky: 0.5 });
+    if (e.sinking) return;
     damageEnemy(e, TORP_TYPES.mk15.damage + e.type.hp * 0.35, p);
     if (keel >= 60 && e.model.len > 40) { if (!e.sinking) damageEnemy(e, e.hp + 1, p); Wreck.breakApart(e.obj); }
 }

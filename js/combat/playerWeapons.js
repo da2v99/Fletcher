@@ -56,8 +56,16 @@ function updatePlayerGuns(dt) {
         }
         if (g.disabled) { tTrain = g.train; tElev = g.elev; }
         const dT = wrapAngle(tTrain - g.train);
-        g.train = wrapAngle(g.train + Math.max(-TRAIN_RATE * dt, Math.min(TRAIN_RATE * dt, dT)));
+        const step = Math.max(-TRAIN_RATE * dt, Math.min(TRAIN_RATE * dt, dT));
+        g.train = wrapAngle(g.train + step);
+        const e0 = g.elev;
         g.elev = stepToward(g.elev, tElev, ELEV_RATE * dt);
+        // The mount's drive: as loud as it's working, fading with distance from you
+        const work = Math.abs(step) / (TRAIN_RATE * dt) + 0.6 * Math.abs(g.elev - e0) / (ELEV_RATE * dt);
+        g.mount.getWorldPosition(_mp);
+        if (work > 0.02) GunDrive.add('main', work * 0.7 / (1 + _mp.distanceTo(camera.position) / 30), Math.abs(step) / (TRAIN_RATE * dt));
+        const moving = g.moving ? work > 0.02 : work > 0.12;
+        if (moving !== !!g.moving) { g.moving = moving; if (simTime - (g.clunkT || -9) > 0.8) { g.clunkT = simTime; GunDrive.clunk(_mp, true); } }
         g.mount.rotation.y = g.train;
         g.pivot.rotation.x = -g.elev;
         g.pivot.position.z = 1.0 - 0.6 * g.recoil;

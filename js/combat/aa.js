@@ -44,7 +44,7 @@ const AA = (() => {
         const pl = Air.hitTest(a, b);
         if (pl) return pl;
         if (b.y < 30) {
-            const e = enemyHitTest(b);
+            const e = enemyHitTest(b, 0, true);
             if (e) return e;
             if (b.y < 60) { const s = Islands.structureAt(b); if (s) return s; }
         }
@@ -55,11 +55,14 @@ const AA = (() => {
         return {
             color: gun.color, drag: gun.drag, life: gun.life, size: gun.size, fade: true,
             test: roundHits,
-            onHit: (hit, p) => {
+            onHit: (hit, p, prev) => {
                 if (hit.isAir) Air.damage(hit, gun.dmg * rnd(0.75, 1.3), p, st.manned && mounts[st.idx] === m ? 'you' : m.name);
                 else if (hit.isStructure) { FX.spark(p, 6); Islands.impact(p, small, hit, true); }
                 else {
                     FX.spark(p, 6);
+                    if (m.kind === 40) FX.flak(p, 0.12);
+                    Wreck.bullet(hit.obj, prev, p, m.kind === 40 ? 0.42 : 0.2);
+                    if (hit.sinking) return;
                     if (hit.typeKey === 'barge') damageEnemy(hit, small * 3, p);
                     else { hit.hp -= small * 0.3; if (hit.hp <= 0) damageEnemy(hit, 0.01, p); }
                 }
@@ -178,9 +181,19 @@ const AA = (() => {
             } else m.target = null;
         }
         const dYaw = wrapAngle(tYaw - m.yaw);
-        m.yaw = wrapAngle(m.yaw + THREE.MathUtils.clamp(dYaw, -trainRate * dt, trainRate * dt));
+        const step = THREE.MathUtils.clamp(dYaw, -trainRate * dt, trainRate * dt);
+        m.yaw = wrapAngle(m.yaw + step);
         tEl = THREE.MathUtils.clamp(tEl, -0.09, 1.5);
+        const e0 = m.el;
         m.el = stepToward(m.el, tEl, elevRate * dt);
+        // Traverse: the Bofors' power drive whines, the hand-trained Oerlikon creaks
+        const work = Math.abs(step) / (gun.train * DEG * dt) * 0.5 + 0.4 * Math.abs(m.el - e0) / (gun.elev * DEG * dt);
+        if (work > 0.03 && dt > 0) {
+            const near = 1 / (1 + _mw.distanceTo(camera.position) / (manned ? 6 : 18));
+            GunDrive.add(m.kind === 40 ? 'b40' : 'o20', Math.min(1.5, work) * near * (manned ? 1 : 0.6), Math.min(1, Math.abs(step) / (trainRate * dt)));
+        }
+        const moving = m.moving ? work > 0.03 : work > 0.15;
+        if (moving !== !!m.moving) { m.moving = moving; if (m.kind === 40 && simTime - (m.clunkT || -9) > 0.8) { m.clunkT = simTime; GunDrive.clunk(_mw, false); } }
         m.obj.rotation.y = m.yaw;
         m.cradle.rotation.x = -m.el;
         if (!aligned) aligned = Math.abs(wrapAngle(tYaw - m.yaw)) < 0.035 && Math.abs(tEl - m.el) < 0.035;

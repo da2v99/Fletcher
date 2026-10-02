@@ -56,7 +56,7 @@ const Tracers = (() => {
     }
 
     // p: muzzle, v: velocity (m/s). o: { color [r,g,b], drag (1/m), life (s), size (m), test(prev, cur) -> hit,
-    // onHit(hit, p), onLand(p), onWater(p), burst(p) }. o is shared by every round of a weapon: keep it static.
+    // onHit(hit, p, prev: where the round was a moment before), onLand(p), onWater(p), burst(p) }. o is shared by every round of a weapon: keep it static.
     function fire(p, v, o) {
         if (live.length >= MAX) return;
         const r = pool.pop() || { p: new THREE.Vector3(), v: new THREE.Vector3(), prev: new THREE.Vector3(), age: 0, o: null };
@@ -80,7 +80,7 @@ const Tracers = (() => {
                 let end = false;
                 if (o.test) {
                     const hit = o.test(r.prev, r.p);
-                    if (hit) { if (o.onHit) o.onHit(hit, r.p); end = true; }
+                    if (hit) { if (o.onHit) o.onHit(hit, r.p, r.prev); end = true; }
                 }
                 if (!end && r.p.y < 450) {
                     const g = Islands.groundAt(r.p.x, r.p.z);

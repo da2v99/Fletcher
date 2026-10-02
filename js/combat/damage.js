@@ -25,12 +25,12 @@ function playerHitTest(p, slack = 0) {
     return Math.abs(_pl.x) < half + slack;
 }
 
-function onPlayerShellHit(p) {
+function onPlayerShellHit(p, dir = null) {
     if (playerDmg.sinking) return;
     const local = myShip.worldToLocal(p.clone());
     FX.explosion(p);
     playBoom(p, 1.2, 1100, 2.4);
-    if (HullDamage.onPlayer(local, 1) >= 100) breakPlayer();
+    if (HullDamage.onPlayer(local, 1, dir ? p.clone().addScaledVector(dir, -15) : null, dir) >= 100) breakPlayer();
     Debris.burst(p, rnd(10, 16), 0.55, { vel: phys.vel.clone(), dir: new THREE.Vector3(Math.sign(local.x || 1), 0.3, 0).applyQuaternion(phys.quat) });
     const dmg = rnd(3, 5);
     playerDmg.hull -= dmg;
@@ -62,7 +62,8 @@ function onPlayerTorpedoHit(p) {
     const local = myShip.worldToLocal(p.clone());
     FX.waterColumn(p);
     playBoom(p, 2.2, 380, 4);
-    const keel = HullDamage.onPlayer(local.clone().setY(-0.6), 4);
+    const dir = new THREE.Vector3(phys.pos.x - p.x, 0, phys.pos.z - p.z).normalize();
+    const keel = HullDamage.onPlayer(local.clone().setY(-0.6), 4, p.clone().setY(p.y - 0.8).addScaledVector(dir, -12), dir);
     Debris.burst(p.clone().setY(p.y + 3), 36, 1, { vel: phys.vel.clone(), speed: 1.2, smoky: 0.5 });
     if (keel >= 100) breakPlayer();
     cameraShake(2.2);

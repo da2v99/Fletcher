@@ -333,8 +333,9 @@ const Air = (() => {
         for (let k = 1; k <= 4; k++) if (playerHitTest(_sp.copy(a).lerp(b, k / 4))) return true;
         return null;
     }
-    function strafeHit(p, dmg, cannon) {
+    function strafeHit(p, dmg, cannon, prev) {
         FX.spark(p, cannon ? 10 : 4);
+        if (prev) Wreck.bullet(myShip, prev, p, cannon ? 0.24 : 0.09);
         if (playerDmg.sinking || !Game.running) return;
         playerDmg.hull -= dmg;
         if (cannon && typeof AA !== 'undefined') AA.strafed(p);
@@ -344,8 +345,8 @@ const Air = (() => {
         }
     }
     const splashSmall = p => FX.smallSplash(p.x, waterHeight(p.x, p.z, simTime), p.z, 0.6);
-    const GUN20 = { color: [1, 0.72, 0.35], drag: 7e-4, life: 2.4, size: 1.0, test: hitsShip, onHit: (h, p) => strafeHit(p, 0.3, true), onWater: splashSmall };
-    const GUN77 = { color: [1, 0.92, 0.65], drag: 1e-3, life: 1.9, size: 0.55, test: hitsShip, onHit: (h, p) => strafeHit(p, 0.025, false), onWater: splashSmall };
+    const GUN20 = { color: [1, 0.72, 0.35], drag: 7e-4, life: 2.4, size: 1.0, test: hitsShip, onHit: (h, p, prev) => strafeHit(p, 0.3, true, prev), onWater: splashSmall };
+    const GUN77 = { color: [1, 0.92, 0.65], drag: 1e-3, life: 1.9, size: 0.55, test: hitsShip, onHit: (h, p, prev) => strafeHit(p, 0.025, false, prev), onWater: splashSmall };
     function strafe(p, dt) {
         p.fireT -= dt;
         if (p.burstT <= 0) {
@@ -415,6 +416,9 @@ const Air = (() => {
         cameraShake(1.8);
         if (playerDmg.sinking) return;
         const local = myShip.worldToLocal(p.clone());
+        // A crater blown in her: straight down through the deck where it struck
+        if (HullDamage.onPlayer(local, 3, p.clone().setY(p.y + 14), new THREE.Vector3(0, -1, 0)) >= 100) breakPlayer();
+        Debris.burst(p, 26, 0.9, { vel: phys.vel.clone(), speed: 1.2, smoky: 0.5, burning: 0.4 });
         playerDmg.hull -= rnd(10, 16);
         Game.stats.hitsTaken++;
         let msg = `BOMB HIT ${local.z > 20 ? 'forward' : local.z < -20 ? 'aft' : 'amidships'}!`;

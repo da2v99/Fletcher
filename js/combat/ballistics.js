@@ -104,10 +104,10 @@ function updateShells(dt, t) {
             for (let j = 1; j <= 4 && !done; j++) {
                 _hp.copy(_prev).lerp(s.pos, j / 4);
                 if (s.owner === 'player') {
-                    const e = enemyHitTest(_hp);
-                    if (e) { onEnemyShellHit(e, _hp.clone()); done = true; }
+                    const e = enemyHitTest(_hp, 0, true);   // wrecks going down still stop a shell
+                    if (e) { onEnemyShellHit(e, _hp.clone(), s.vel.clone().normalize()); done = true; }
                 } else if (playerHitTest(_hp)) {
-                    onPlayerShellHit(_hp.clone());
+                    onPlayerShellHit(_hp.clone(), s.vel.clone().normalize());
                     done = true;
                 }
             }
