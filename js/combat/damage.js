@@ -25,11 +25,13 @@ function playerHitTest(p, slack = 0) {
     return Math.abs(_pl.x) < half + slack;
 }
 
-function onPlayerShellHit(p) {
+function onPlayerShellHit(p, dir = null) {
     if (playerDmg.sinking) return;
     const local = myShip.worldToLocal(p.clone());
     FX.explosion(p);
     playBoom(p, 1.2, 1100, 2.4);
+    if (HullDamage.onPlayer(local, 1, dir ? p.clone().addScaledVector(dir, -15) : null, dir) >= 100) breakPlayer();
+    Debris.burst(p, rnd(10, 16), 0.55, { vel: phys.vel.clone(), dir: new THREE.Vector3(Math.sign(local.x || 1), 0.3, 0).applyQuaternion(phys.quat) });
     const dmg = rnd(3, 5);
     playerDmg.hull -= dmg;
     Game.stats.hitsTaken++;
@@ -60,6 +62,10 @@ function onPlayerTorpedoHit(p) {
     const local = myShip.worldToLocal(p.clone());
     FX.waterColumn(p);
     playBoom(p, 2.2, 380, 4);
+    const dir = new THREE.Vector3(phys.pos.x - p.x, 0, phys.pos.z - p.z).normalize();
+    const keel = HullDamage.onPlayer(local.clone().setY(-0.6), 4, p.clone().setY(p.y - 0.8).addScaledVector(dir, -12), dir);
+    Debris.burst(p.clone().setY(p.y + 3), 36, 1, { vel: phys.vel.clone(), speed: 1.2, smoky: 0.5 });
+    if (keel >= 100) breakPlayer();
     cameraShake(2.2);
     playerDmg.hull -= rnd(34, 44);
     phys.engine = Math.max(0.25, phys.engine * 0.7);
@@ -77,6 +83,17 @@ function onEnemyShellMiss(p) {
         hudMessage(d < 60 ? 'Straddled!' : 'Near miss!', 'warn');
         cameraShake(0.25);
     }
+}
+
+// Her back is broken: she goes in two and down
+function breakPlayer() {
+    const W = Wreck.get(myShip);
+    if (!W || W.broken) return;
+    Wreck.breakApart(myShip);
+    hudMessage('HER BACK IS BROKEN — she is breaking in two!', 'alert');
+    playerDmg.hull = Math.min(playerDmg.hull, 0);
+    addFlood(new THREE.Vector3(0, -2, W.cutZ), 900000);
+    playAlarm();
 }
 
 // Floodwater collects low in the hull near the hole; the weighted average drives list and trim
@@ -113,7 +130,8 @@ function updatePlayerDamage(dt) {
     }
     if (playerDmg.sinking) {
         playerDmg.sinkT += dt;
-        addFlood(phys.floodPoint.clone(), 160000 * dt);
+        const W = Wreck.get(myShip);
+        addFlood(phys.floodPoint.clone(), (W && W.broken ? 420000 : 160000) * dt);   // broken in two she goes fast
     }
 }
 

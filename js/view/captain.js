@@ -2,7 +2,7 @@
 // on the ship under the crosshair (see aiming.js).
 
 const captain = {
-    active: false, station: 1, yaw: 0, pitch: -0.01, binoc: false, mag: 7, fov: 55,
+    active: false, station: 1, yaw: 0, pitch: -0.01, tYaw: 0, tPitch: -0.01, binoc: false, mag: 7, fov: 55,
     locked: false, dragging: false, relBrg: 0, trueBrg: 0
 };
 const STATION_NAMES = ['Port Bridge Wing', 'Open Bridge', 'Starboard Bridge Wing'];
@@ -13,8 +13,8 @@ function setCaptain(on) {
     captain.binoc = false;
     document.body.classList.toggle('captain', on);
     if (on) {
-        captain.yaw = 0;
-        captain.pitch = -0.01;
+        captain.yaw = captain.tYaw = 0;
+        captain.pitch = captain.tPitch = -0.01;
         camera.near = 0.25;
         setCameraMode('captain');
     } else {
@@ -28,6 +28,8 @@ function setCaptain(on) {
 }
 
 function updateCaptainCamera(dt) {
+    captain.yaw = easeLook(captain.yaw, captain.tYaw, dt);
+    captain.pitch = easeLook(captain.pitch, captain.tPitch, dt);
     const eye = myShip.userData.eyes[captain.station];
     const p = myShip.localToWorld(eye.clone());
     camera.position.copy(p);
@@ -57,6 +59,7 @@ function resizeOverlay() {
 function drawOverlay() {
     const ctx = overlayCtx, w = overlay.width, h = overlay.height;
     ctx.clearRect(0, 0, w, h);
+    if (Person.active) { if (Game.running) drawLockBracket(ctx, w, h); Person.drawHud(ctx, w, h); return; }
     if (!Game.running) return;
     if (AA.manned) { AA.drawSight(ctx, w, h); drawLockBracket(ctx, w, h); return; }
     drawObjectiveMarker(ctx, w, h);
@@ -126,7 +129,7 @@ function initCaptainInput() {
         if (e.pointerType !== 'mouse' || !captain.active || !Game.running) return;
         ensureAudio();
         if (!captain.locked && el.requestPointerLock) {
-            el.requestPointerLock();
+            lockPointer(el);
             captain.dragging = true;
             return;
         }
@@ -141,9 +144,9 @@ function initCaptainInput() {
     });
     window.addEventListener('mousemove', e => {
         if (!captain.active || (!captain.locked && !captain.dragging) || !Number.isFinite(e.movementX)) return;
-        const sens = 0.0022 * captain.fov / 55 * Settings.ctl.lookSens;
-        captain.yaw -= e.movementX * sens;
-        captain.pitch = THREE.MathUtils.clamp(captain.pitch - e.movementY * sens, -1.2, 1.2);
+        const sens = 0.0022 * captain.fov / 55 * zoomSens(captain.fov) * Settings.ctl.lookSens;
+        captain.tYaw -= e.movementX * sens;
+        captain.tPitch = THREE.MathUtils.clamp(captain.tPitch - e.movementY * sens, -1.2, 1.2);
     });
     el.addEventListener('wheel', e => {
         if (!captain.active) return;

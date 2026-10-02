@@ -287,8 +287,8 @@ const TouchUI = (() => {
         if (captain.active) {
             if (pts.size === 1) {
                 const k = sens * captain.fov / 55;
-                captain.yaw -= dx * k;
-                captain.pitch = THREE.MathUtils.clamp(captain.pitch - dy * k, -1.2, 1.2);
+                captain.tYaw -= dx * k;
+                captain.tPitch = THREE.MathUtils.clamp(captain.tPitch - dy * k, -1.2, 1.2);
             } else if (pts.size === 2) {
                 const [a, b] = [...pts.values()];
                 const d = Math.hypot(a.x - b.x, a.y - b.y);
@@ -386,8 +386,8 @@ const TouchUI = (() => {
         if (Settings.ctl.aimGyro && captain.active) {
             const l = Gyro.look(dt);
             const k = captain.fov / 55;
-            captain.yaw += l.yaw * k;
-            captain.pitch = THREE.MathUtils.clamp(captain.pitch + l.pitch * k, -1.2, 1.2);
+            captain.tYaw += l.yaw * k;
+            captain.tPitch = THREE.MathUtils.clamp(captain.tPitch + l.pitch * k, -1.2, 1.2);
         }
         // Buttons for the current view
         const aaOn = typeof AA !== 'undefined';

@@ -39,6 +39,8 @@ function spawnEnemy(typeKey, x, z, heading) {
     if (typeKey !== 'barge') ({ x, z } = Islands.clearSpot(x, z, 600));   // never start on a reef
     const model = enemyModel(typeKey);
     scene.add(model.group);
+    // Her own copy of the materials so her hull can hole, dent, sag and break (wreck.js)
+    Wreck.attach(model.group, { len: model.len, beam: model.beam, sharedGeo: true, inner: m => !!m.vertexColors, maxTilt: model.len > 80 ? 0.5 : 0.7 });
     const e = {
         id: ++enemySerial, typeKey, type, model, obj: model.group,
         x, z, heading, speed: type.speed * 0.8, hp: type.hp, alive: true, sinking: false, sinkT: 0,
@@ -51,7 +53,7 @@ function spawnEnemy(typeKey, x, z, heading) {
 }
 
 function clearEnemies() {
-    enemies.forEach(e => scene.remove(e.obj));
+    enemies.forEach(e => { scene.remove(e.obj); Wreck.remove(e.obj); });
     enemies.length = 0;
 }
 
@@ -134,11 +136,14 @@ function updateEnemies(dt, t) {
         const hs = seaPatchHeight(e.x - sx * L, e.z - cz * L, t, sx, cz, pl, pw, pd);
         const hp = seaPatchHeight(e.x + cz * B, e.z - sx * B, t, sx, cz, pl, pw, pd);
         const hst = seaPatchHeight(e.x - cz * B, e.z + sx * B, t, sx, cz, pl, pw, pd);
-        const sink = e.sinking ? e.sinkT * e.sinkT * 0.01 + e.sinkT * 0.12 : 0;
+        const W = e.obj.userData.wreck, broken = W && W.broken;
+        // Broken in two the halves pivot up and go down fast; whole, she settles and lists as she floods
+        const sink = e.sinking ? (broken ? e.sinkT * e.sinkT * 0.014 + e.sinkT * 0.05 : e.sinkT * e.sinkT * 0.01 + e.sinkT * 0.12) : 0;
         const tilt = e.sinking ? e.sinkT : 0;
         e.obj.position.set(e.x, (hb + hs + hp + hst) / 4 - sink, e.z);
-        e.obj.rotation.set(Math.atan2(hs - hb, 2 * L) * 0.8 + tilt * 0.004 * e.side, e.heading, Math.atan2(hp - hst, 2 * B) * 0.6 + tilt * 0.012 * e.side, 'YXZ');
+        e.obj.rotation.set(Math.atan2(hs - hb, 2 * L) * 0.8 + (broken ? 0 : tilt * 0.004 * e.side), e.heading, Math.atan2(hp - hst, 2 * B) * 0.6 + tilt * (broken ? 0.005 : 0.012) * e.side, 'YXZ');
         e.obj.updateMatrixWorld(true);
+        if (broken) Wreck.pose(e.obj, dt);
 
         // Fires and funnel smoke
         const damage = 1 - e.hp / e.type.hp;
@@ -156,8 +161,9 @@ function updateEnemies(dt, t) {
                     life: rnd(6, 10), s0: 3, s1: 16, r: 0.25, g: 0.24, b: 0.24, a: 0.35, drag: 0.4, grav: -0.2 });
             }
         }
-        if (sink > 20 || d > 26000) {
+        if (sink > (broken ? 28 : 20) || d > 26000) {
             scene.remove(e.obj);
+            Wreck.remove(e.obj);
             enemies.splice(i, 1);
         }
     }
@@ -232,17 +238,30 @@ function enemyTorpedoes(e, d, dt) {
 }
 
 // Point-in-hull test for our shells and torpedoes (slack widens the box)
-function enemyHitTest(p, slack = 0) {
+// Is world point p inside this hull (obj: the ship, or the stern half of a broken one)? Returns the ship-local point
+function inHull(e, obj, p, slack) {
+    _ev.copy(p);
+    obj.worldToLocal(_ev);
+    const halfLen = e.model.len / 2 - (Math.abs(_ev.z) > e.model.len * 0.3 ? (Math.abs(_ev.z) - e.model.len * 0.3) * 0.6 : 0);
+    return Math.abs(_ev.z) < e.model.len / 2 && Math.abs(_ev.x) < e.model.beam / 2 * (halfLen / (e.model.len / 2)) + slack &&
+        _ev.y > -e.type.draft - slack && _ev.y < (Math.abs(_ev.z) < e.model.len * 0.3 ? e.model.top : 7) ? _ev : null;
+}
+// wrecks: sinking ships (and both halves of a broken one) still stop rounds
+function enemyHitTest(p, slack = 0, wrecks = false) {
     for (const e of enemies) {
-        if (e.sinking) continue;
+        if (e.sinking && !wrecks) continue;
         const dx = p.x - e.x, dz = p.z - e.z;
-        const r = e.model.len / 2 + 10;
+        const r = e.model.len / 2 + 16;
         if (dx * dx + dz * dz > r * r) continue;
-        _ev.copy(p);
-        e.obj.worldToLocal(_ev);
-        const halfLen = e.model.len / 2 - (Math.abs(_ev.z) > e.model.len * 0.3 ? (Math.abs(_ev.z) - e.model.len * 0.3) * 0.6 : 0);
-        if (Math.abs(_ev.z) < e.model.len / 2 && Math.abs(_ev.x) < e.model.beam / 2 * (halfLen / (e.model.len / 2)) + slack &&
-            _ev.y > -e.type.draft - slack && _ev.y < (Math.abs(_ev.z) < e.model.len * 0.3 ? e.model.top : 7)) return e;
+        const W = e.obj.userData.wreck;
+        if (W && W.broken) {
+            const a = inHull(e, e.obj, p, slack);
+            if (a && a.z > W.cutZ - 1) return e;
+            const b = inHull(e, W.half.root, p, slack);
+            if (b && b.z < W.cutZ + 1) return e;
+            continue;
+        }
+        if (inHull(e, e.obj, p, slack)) return e;
     }
     return null;
 }
@@ -254,19 +273,57 @@ function damageEnemy(e, amount, worldP) {
     if (e.hp <= 0) {
         e.sinking = true;
         Game.onEnemySunk(e);
+        // Her magazine or boilers go: a secondary explosion, wreckage everywhere, a mount or two blown off
+        const big = e.model.len > 40;
+        const p = e.obj.localToWorld(new THREE.Vector3(0, 3, rnd(-0.2, 0.2) * e.model.len));
+        FX.explosion(p, big ? 2.2 : 1);
+        if (big) FX.fuelBlast(p, 0.7);
+        playBoom(p, 1.6, 300, 3.5);
+        Debris.burst(p, big ? 50 : 16, big ? 1.3 : 0.7, { vel: enemyVelocity(e).clone(), speed: 1.4, smoky: 0.6, burning: 0.45 });
+        Debris.burst(p, big ? 30 : 10, big ? 1 : 0.6, { vel: enemyVelocity(e).clone(), speed: 0.7, kind: 4 });
+        for (let k = 0; k < (big ? 2 : 0); k++) blowOffMount(e, 1.4);
+        // A broken back, a magazine or a torpedo amidships: she breaks in two
+        const W = e.obj.userData.wreck;
+        if (big && W && (W.keel > 45 || Math.random() < 0.3)) Wreck.breakApart(e.obj);
     }
 }
 
-function onEnemyShellHit(e, p) {
+// A gun mount (or torpedo launcher) torn off the ship by a hit and thrown into the air
+const _bo = new THREE.Vector3();
+function blowOffMount(e, force = 1) {
+    const list = e.model.turrets.length ? e.model.turrets : e.model.torpLaunchers;
+    if (!list.length) return;
+    const t = list.splice(Math.floor(Math.random() * list.length), 1)[0];
+    const v = enemyVelocity(e).clone().add(_bo.set(randn() * 5, rnd(14, 24) * force, randn() * 5));
+    Debris.blowOff(t, v, force);
+}
+
+// dir: the shell's direction of flight, to find exactly where on her it struck
+function onEnemyShellHit(e, p, dir = null) {
     FX.explosion(p);
     playBoom(p, 0.8, 900, 2.2);
+    // Wreckage out of the hit, a hole in her side, and now and then a mount blown clean off once she is hurt
+    const local = e.obj.worldToLocal(p.clone());
+    const keel = HullDamage.onEnemy(e, local, 1, dir ? p.clone().addScaledVector(dir, -15) : null, dir);
+    _bo.set(Math.sign(local.x || 1), 0, 0).transformDirection(e.obj.matrixWorld);
+    Debris.burst(p, rnd(10, 16), 0.55, { vel: enemyVelocity(e).clone(), dir: _bo.clone() });
+    if (e.sinking) return;   // a wreck going down: torn up further, nothing more to score
     Game.onHit(e);
+    if (keel >= 100 && e.model.len > 40) { damageEnemy(e, e.hp + 1, p); if (!e.obj.userData.wreck.broken) Wreck.breakApart(e.obj); return; }
+    if (e.hp < e.type.hp * 0.55 && e.model.len > 40 && Math.random() < 0.18) blowOffMount(e);
     damageEnemy(e, 1, p);
 }
 
 function onEnemyTorpedoHit(e, p) {
     FX.waterColumn(p);
     playBoom(p, 1.6, 400, 3.5);
-    hudMessage(`Torpedo hit on the ${e.type.name.toLowerCase()}!`, 'good');
+    if (!e.sinking) hudMessage(`Torpedo hit on the ${e.type.name.toLowerCase()}!`, 'good');
+    const local = e.obj.worldToLocal(p.clone());
+    // Into her side below the waterline: cast in toward her centreline to find the plating
+    const at = p.clone().setY(p.y - 0.8), dir = new THREE.Vector3(e.x - p.x, 0, e.z - p.z).normalize();
+    const keel = HullDamage.onEnemy(e, local.setY(-0.8), 4, at.clone().addScaledVector(dir, -12), dir);
+    Debris.burst(p.clone().setY(p.y + 2), 34, 1, { vel: enemyVelocity(e).clone(), speed: 1.2, smoky: 0.5 });
+    if (e.sinking) return;
     damageEnemy(e, TORP_TYPES.mk15.damage + e.type.hp * 0.35, p);
+    if (keel >= 60 && e.model.len > 40) { if (!e.sinking) damageEnemy(e, e.hp + 1, p); Wreck.breakApart(e.obj); }
 }

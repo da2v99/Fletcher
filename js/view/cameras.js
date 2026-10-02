@@ -1,12 +1,18 @@
-// Camera modes: 'chase' (behind the ship), 'orbit' (mouse orbit that follows the ship),
-// 'captain' (bridge / binoculars) and 'cinematic' (slow fly-around for the menus).
+// Camera modes: 'chase' (behind the ship), 'orbit' (mouse orbit that follows the ship), 'aim' (left-click:
+// the mouse is captured and orbits the camera round the ship, crosshair fixed in the centre for fine aim),
+// 'captain' (bridge / binoculars), 'aa' (on a light AA gun), 'person' (on foot, swimming or in a boat) and
+// 'cinematic' (slow fly-around for the menus).
 
 let cameraMode = 'cinematic';
 let cameraGrabbedFrom = null;   // the mode a drag switched away from (a touch tap switches back)
 const lastShipPos = new THREE.Vector3();
 const cine = { angle: 2.2, radius: 150, height: 34 };
+// Gun-aim camera: world yaw / pitch of the line of sight (eased toward the mouse's targets), distance behind
+// the ship, and a hold-to-zoom scope
+const aimCam = { yaw: 0, pitch: -0.04, tYaw: 0, tPitch: -0.04, dist: 95, tDist: 95, fov: 45, zoom: false };
 
 function setCameraMode(mode, keepView = false) {
+    const prev = cameraMode;
     cameraMode = mode;
     controls.enabled = mode === 'orbit';
     if (mode === 'orbit') controls.target.copy(phys.pos).add(new THREE.Vector3(0, 6, 0));
@@ -14,24 +20,103 @@ function setCameraMode(mode, keepView = false) {
         const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(phys.quat);
         camera.position.copy(phys.pos).addScaledVector(fwd, 60).add(new THREE.Vector3(fwd.z * 90, 35, -fwd.x * 90));
     }
-    document.getElementById('camLabel').textContent = { chase: 'Chase camera', orbit: 'Orbit camera', captain: "Captain's view", aa: 'AA gun', cinematic: '' }[mode];
+    if (prev === 'aim' && mode !== 'aim') {
+        aimCam.zoom = false;
+        director.trigger = false;
+        if (camera.fov !== 45) { camera.fov = 45; camera.updateProjectionMatrix(); }
+        if (mode === 'orbit' && keepView) controls.target.copy(phys.pos).add(new THREE.Vector3(0, 6, 0));
+    }
+    document.body.classList.toggle('aimcam', mode === 'aim');
+    document.getElementById('camLabel').textContent = {
+        chase: 'Chase camera · click to aim', orbit: 'Orbit camera · click to aim', aim: 'Gun-aim camera · click / Space fire · right mouse zoom · Esc frees the mouse',
+        captain: "Captain's view", aa: 'AA gun', person: 'On foot', cinematic: ''
+    }[mode];
 }
 
-// C: chase <-> orbit (leaves the captain's view or the AA gun)
+// C: chase <-> orbit (leaves the captain's view, the AA gun or the aim camera)
 function cycleCamera() {
     if (AA.manned) { AA.leave(); return; }
     if (captain.active) { setCaptain(false); return; }
+    if (cameraMode === 'aim') { if (document.pointerLockElement) document.exitPointerLock(); setCameraMode('chase'); return; }
     setCameraMode(cameraMode === 'chase' ? 'orbit' : 'chase');
 }
 
-// Grabbing the view in chase mode (left-drag pan, right-drag orbit, wheel zoom) hands over to the orbit camera.
-// Capture-phase listeners run before OrbitControls' own, so the same drag carries straight on.
+// Enter the gun-aim camera from wherever the third-person camera is now, looking the same way
+function enterAimCamera() {
+    const dir = camera.getWorldDirection(new THREE.Vector3());
+    aimCam.yaw = aimCam.tYaw = Math.atan2(dir.x, dir.z);
+    aimCam.pitch = aimCam.tPitch = THREE.MathUtils.clamp(Math.asin(dir.y), -1.2, 0.5);
+    aimCam.dist = aimCam.tDist = THREE.MathUtils.clamp(camera.position.distanceTo(phys.pos), 45, 420);
+    aimCam.fov = camera.fov;
+    setCameraMode('aim');
+    lockPointer(renderer.domElement);
+}
+
+// Left click in the chase or orbit camera captures the mouse for the gun-aim camera; right drag orbits and the
+// wheel zooms as before (a drag in chase view hands over to the orbit camera). Capture-phase listeners run
+// before OrbitControls' own.
 function initCameraInput() {
     const el = renderer.domElement;
     const grab = () => { if (Game.running && cameraMode === 'chase') { cameraGrabbedFrom = 'chase'; setCameraMode('orbit', true); } };
-    el.addEventListener('pointerdown', e => { if (e.button === 0 || e.button === 2) grab(); }, { capture: true });
-    el.addEventListener('wheel', grab, { capture: true });
+    el.addEventListener('pointerdown', e => {
+        if (e.pointerType === 'mouse' && Game.running && !Game.paused && (cameraMode === 'chase' || cameraMode === 'orbit') && e.button === 0) {
+            e.stopImmediatePropagation();
+            ensureAudio();
+            enterAimCamera();
+            return;
+        }
+        if (cameraMode === 'aim' && e.pointerType === 'mouse') {
+            e.stopImmediatePropagation();
+            if (document.pointerLockElement !== el) { lockPointer(el); return; }
+            if (e.button === 0) { ensureAudio(); director.trigger = true; }
+            if (e.button === 2) aimCam.zoom = true;
+            return;
+        }
+        if (e.button === 2) grab();
+    }, { capture: true });
+    window.addEventListener('pointerup', e => {
+        if (cameraMode !== 'aim' || e.pointerType !== 'mouse') return;
+        if (e.button === 0) director.trigger = false;
+        if (e.button === 2) aimCam.zoom = false;
+    });
+    el.addEventListener('wheel', e => {
+        if (cameraMode === 'aim') {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            aimCam.tDist = THREE.MathUtils.clamp(aimCam.tDist * (e.deltaY > 0 ? 1.12 : 0.89), 45, 420);
+            return;
+        }
+        grab();
+    }, { capture: true, passive: false });
     el.addEventListener('contextmenu', e => { if (!captain.active) e.preventDefault(); });
+    window.addEventListener('mousemove', e => {
+        if (cameraMode !== 'aim' || document.pointerLockElement !== el || !Number.isFinite(e.movementX)) return;
+        const k = 0.0021 * aimCam.fov / 45 * zoomSens(aimCam.fov) * Settings.ctl.lookSens;
+        aimCam.tYaw -= e.movementX * k;
+        aimCam.tPitch = THREE.MathUtils.clamp(aimCam.tPitch - e.movementY * k, -1.25, 0.55);
+    });
+    // Esc (the browser's own pointer-lock exit) leaves the aim camera for the free orbit camera
+    document.addEventListener('pointerlockchange', () => {
+        if (cameraMode === 'aim' && document.pointerLockElement !== el) setCameraMode('orbit', true);
+    });
+}
+
+const _acDir = new THREE.Vector3(), _acPiv = new THREE.Vector3();
+function updateAimCamera(dt) {
+    aimCam.yaw = easeLook(aimCam.yaw, aimCam.tYaw, dt);
+    aimCam.pitch = easeLook(aimCam.pitch, aimCam.tPitch, dt);
+    aimCam.dist += (aimCam.tDist - aimCam.dist) * (1 - Math.exp(-dt * 8));
+    const cp = Math.cos(aimCam.pitch);
+    const dir = _acDir.set(Math.sin(aimCam.yaw) * cp, Math.sin(aimCam.pitch), Math.cos(aimCam.yaw) * cp);
+    // The camera sits behind and above a pivot over the ship and looks exactly along the line of sight, so
+    // the ship sits low in the frame and the crosshair looks over it at the horizon
+    const piv = _acPiv.copy(phys.pos).setY(phys.pos.y + 12);
+    camera.position.copy(piv).addScaledVector(dir, -aimCam.dist);
+    camera.position.y += aimCam.dist * 0.16;
+    camera.lookAt(piv.copy(camera.position).add(dir));
+    const fov = aimCam.zoom ? 14 : 45;
+    aimCam.fov += (fov - aimCam.fov) * Math.min(1, dt * 12);
+    if (Math.abs(camera.fov - aimCam.fov) > 0.01) { camera.fov = aimCam.fov; camera.updateProjectionMatrix(); }
 }
 
 function updateCamera(dt, t) {
@@ -41,6 +126,10 @@ function updateCamera(dt, t) {
         updateCaptainCamera(dt);
     } else if (cameraMode === 'aa') {
         AA.updateCamera(dt);
+    } else if (cameraMode === 'person') {
+        Person.updateCamera(dt, t);
+    } else if (cameraMode === 'aim') {
+        updateAimCamera(dt);
     } else if (cameraMode === 'chase') {
         const desired = new THREE.Vector3(phys.pos.x - fwdH.x * 85, phys.pos.y + 26, phys.pos.z - fwdH.y * 85);
         camera.position.lerp(desired, 1 - Math.exp(-dt * 2.6));
@@ -52,11 +141,11 @@ function updateCamera(dt, t) {
         controls.update();
     } else {
         cine.angle += dt * 0.045;
-        camera.position.set(phys.pos.x + Math.sin(cine.angle) * cine.radius, phys.pos.y + cine.height, phys.pos.z + Math.cos(cine.angle) * cine.radius);
+        camera.position.set(phys.pos.x + Math.sin(cine.angle) * cine.radius, Math.max(phys.pos.y, 0) + cine.height, phys.pos.z + Math.cos(cine.angle) * cine.radius);
         camera.lookAt(phys.pos.x, phys.pos.y + 7, phys.pos.z);
     }
     lastShipPos.copy(phys.pos);
-    if (cameraMode === 'aa') updateDirector();   // a lock (X in the gunsight) still lays the 5"/38s
+    if (cameraMode === 'aa' || cameraMode === 'person') updateDirector();   // a lock still lays the 5"/38s
     else if (cameraMode !== 'captain') {
         if (Game.running) {
             camera.updateMatrixWorld(true);
@@ -64,13 +153,13 @@ function updateCamera(dt, t) {
         } else director.aimValid = false;
     }
 
-    if (cameraMode !== 'captain' && cameraMode !== 'aa') {
+    if (cameraMode !== 'captain' && cameraMode !== 'aa' && cameraMode !== 'person') {
         let floor = waterVisible() ? waterHeight(camera.position.x, camera.position.z, t) + 1.5 : -1e9;
         floor = Math.max(floor, Islands.groundAt(camera.position.x, camera.position.z) + 3);   // never inside a hill
         if (camera.position.y < floor) camera.position.y = floor;
     }
     // Near plane: as far out as the view allows, so distant coastlines don't fight the sea in the depth buffer
-    const near = cameraMode === 'captain' ? (captain.binoc ? 2.5 : 0.25) : cameraMode === 'aa' ? 0.3 : 2;
+    const near = cameraMode === 'captain' ? (captain.binoc ? 2.5 : 0.25) : cameraMode === 'aa' || cameraMode === 'person' ? 0.12 : 2;
     if (camera.near !== near) { camera.near = near; camera.updateProjectionMatrix(); }
     applyCameraShake(dt);
 }

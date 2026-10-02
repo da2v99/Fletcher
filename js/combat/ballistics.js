@@ -104,10 +104,10 @@ function updateShells(dt, t) {
             for (let j = 1; j <= 4 && !done; j++) {
                 _hp.copy(_prev).lerp(s.pos, j / 4);
                 if (s.owner === 'player') {
-                    const e = enemyHitTest(_hp);
-                    if (e) { onEnemyShellHit(e, _hp.clone()); done = true; }
+                    const e = enemyHitTest(_hp, 0, true);   // wrecks going down still stop a shell
+                    if (e) { onEnemyShellHit(e, _hp.clone(), s.vel.clone().normalize()); done = true; }
                 } else if (playerHitTest(_hp)) {
-                    onPlayerShellHit(_hp.clone());
+                    onPlayerShellHit(_hp.clone(), s.vel.clone().normalize());
                     done = true;
                 }
             }
@@ -133,7 +133,7 @@ function updateShells(dt, t) {
             if (!done && s.pos.y < 8) {
                 const wh = waterHeight(s.pos.x, s.pos.z, t);
                 if (s.pos.y < wh) {
-                    FX.splash(s.pos.x, wh, s.pos.z, s.tint);
+                    FX.splash(s.pos.x, wh, s.pos.z);
                     playBoom(s.pos, 0.35, 500, 1.0);
                     if (s.owner === 'enemy') onEnemyShellMiss(s.pos);
                     else Islands.alertNear(s.pos);

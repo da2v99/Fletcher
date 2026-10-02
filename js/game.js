@@ -24,6 +24,12 @@ const Game = {
         smokeFx.clear();
         sprayFx.clear();
         fireFx.clear();
+        Debris.clear();
+        HullDamage.clear(myShip);
+        Wreck.repair(myShip);
+        Person.reset();
+        Underwater.reset();
+        AutoCaptain.reset();
         resetPhysics();
         resetPlayerDamage();
         resetPlayerWeapons();
@@ -64,13 +70,14 @@ const Game = {
         this.resetWorld();
         if (captain.active) setCaptain(false);
         AA.leave();
+        if (document.pointerLockElement) document.exitPointerLock();
         document.body.classList.remove('playing');
         setCameraMode('cinematic');
         showScreen('mainMenu');
     },
 
     setPaused(p) {
-        if (!this.running || this.over) return;
+        if ((!this.running || this.over) && !Person.active) return;
         this.paused = p;
         director.trigger = false;
         AA.trigger = false;
@@ -134,6 +141,13 @@ const Game = {
     },
 
     update(dt) {
+        if (playerDmg.sinking && !this.over && playerDmg.sinkT > 9) {
+            // You're still in the world (on deck, in the water or in the boat): no game-over screen, play on;
+            // Esc has the menu and Restart
+            this.over = true;
+            if (!Person.active) Person.onShipSinking();
+            hudMessage(`USS Fletcher is lost. Final score ${this.score.toLocaleString()}. Esc: menu or restart.`, 'alert');
+        }
         if (!this.running) return;
         this.phaseT -= dt;
         if (this.mode === 'patrol') {
@@ -165,7 +179,6 @@ const Game = {
         } else if (this.mode === 'cruise' && enemies.filter(e => !e.sinking && !e.island).length < 4) {
             this.spawnTransport(rnd(5000, 10000), rnd(-1.4, 1.4));
         }
-        if (playerDmg.sinking && !this.over && playerDmg.sinkT > 9) this.gameOver();
     },
 
     engagementWon() {
@@ -212,10 +225,15 @@ const Game = {
     },
 
     onPlayerSinking() {
+        Person.onShipSinking();   // on your feet wherever you were (bridge, gun, deck): you play on
         AA.leave();
         this.running = false;
+        this.hostile = false;
         drive.order = STOP_IDX;
+        drive.cmd = null;
+        if (Person.active) return;
         if (captain.active) setCaptain(false);
+        if (document.pointerLockElement) document.exitPointerLock();
         setCameraMode('cinematic');
         cine.radius = 130; cine.height = 22;
     },

@@ -3,10 +3,29 @@
 // then tracked with lead wherever you look, a point of sea stays fixed. X on the current lock releases it.
 // Space fires whatever the director is laid on.
 
-const director = { aim: new THREE.Vector3(), aimValid: false, aimRange: Infinity, lock: null, lockPoint: null, trigger: false };
+const director = { aim: new THREE.Vector3(), aimValid: false, aimRange: Infinity, lock: null, lockPoint: null, trigger: false, aiTrigger: false };
 const tpAim = { x: 0, y: 0, onCanvas: false };   // third-person crosshair = mouse position (px)
 const LOCK_PICK_PX = 28;                           // how close the crosshair must be to a ship to lock it
 const _aimRay = new THREE.Raycaster(), _ndc = new THREE.Vector2(), _proj = new THREE.Vector3();
+
+// Pointer lock with raw, unaccelerated mouse counts where the browser offers them (Chrome, Edge), plain lock
+// elsewhere. OS pointer acceleration is what makes small corrections jump.
+function lockPointer(el) {
+    if (!el.requestPointerLock || document.pointerLockElement === el) return;
+    const plain = () => { try { el.requestPointerLock(); } catch (e) { /* not allowed right now */ } };
+    try {
+        const p = el.requestPointerLock({ unadjustedMovement: true });
+        if (p && p.catch) p.catch(plain);
+    } catch (e) { plain(); }
+}
+
+// Mouse look is sub-pixel: mouse counts move a target angle, and the view eases onto it within a frame or two,
+// so it glides through every in-between angle instead of stepping a whole count (often more than a pixel at
+// binocular magnification) at a time. Aim is taken from the eased view along an exact float ray.
+const LOOK_EASE = 34;   // 1/s
+const easeLook = (cur, target, dt) => cur + (target - cur) * (1 - Math.exp(-dt * LOOK_EASE));
+// Fewer radians per count the narrower the view (on top of the field-of-view scaling): fine corrections
+const zoomSens = fov => Math.pow(Math.min(1, fov / 55), 0.15);
 
 function resetDirector() {
     director.lock = null;
@@ -137,9 +156,10 @@ function updateDirector(sx, sy) {
     director.aimRange = director.aimValid ? Math.hypot(director.aim.x - phys.pos.x, director.aim.z - phys.pos.z) : Infinity;
 }
 
-// Third-person cameras: the crosshair follows the mouse
+// Third-person cameras: the crosshair follows the mouse; in the gun-aim camera it is the exact screen centre
 function updateThirdPersonAim() {
-    if (tpAim.onCanvas) updateDirector(tpAim.x, tpAim.y);
+    if (cameraMode === 'aim') updateDirector(window.innerWidth / 2, window.innerHeight / 2);
+    else if (tpAim.onCanvas) updateDirector(tpAim.x, tpAim.y);
     else updateDirector();
 }
 
@@ -184,8 +204,9 @@ function drawLockBracket(ctx, w, h) {
 
 // Small third-person crosshair with range, lock and gun readiness under it
 function drawThirdPersonCrosshair(ctx) {
-    if (!tpAim.onCanvas) return;
-    const x = tpAim.x, y = tpAim.y;
+    const centred = cameraMode === 'aim';
+    if (!centred && !tpAim.onCanvas) return;
+    const x = centred ? window.innerWidth / 2 : tpAim.x, y = centred ? window.innerHeight / 2 : tpAim.y;
     const ready = guns.filter(g => g.status === 'ready').length;
     const col = ready ? 'rgba(111,224,138,0.95)' : 'rgba(255,210,122,0.95)';
     ctx.strokeStyle = col;

@@ -1,8 +1,10 @@
 // Our light anti-aircraft battery: five twin 40 mm Bofors (160 rounds a minute a barrel, 881 m/s) and six 20 mm
 // Oerlikons (450 a minute, 820 m/s). AI gun crews engage aircraft on their own (Controls: AI gunners), leading the
 // target by the round's time of flight and drop, as the Mk 51 directors and Mk 14 gyro sights did.
-// Take a gun yourself with G (or the AA button): mouse / drag to aim, click / Space / FIRE to shoot, right mouse or
-// Z to zoom, Q / E for the next gun, G to leave. X locks the plane in your sight for the 5"/38s (VT shells).
+// Take a gun yourself with G (or the AA button): mouse / drag to aim, click / Space / FIRE to shoot, wheel or right
+// mouse / Z for a little magnification, Q for the next gun (Shift+Q back), R to have every mount that bears follow your
+// sight and fire with you, G to leave. X locks the plane in your sight for the 5"/38s (VT shells). While you
+// are on a gun the AI captain has the conn and the 5"/38s (autoCaptain.js).
 
 const AA_GUNS = {
     40: { name: '40 mm Bofors', v0: 881, drag: 2.4e-4, interval: 60 / 320, life: 4.6, size: 1.7, color: [1, 0.42, 0.18], dmg: 1.3,
@@ -13,7 +15,11 @@ const AA_GUNS = {
 
 const AA = (() => {
     const mounts = [];
-    const st = { manned: false, idx: 0, yaw: 0, pitch: 0.25, zoom: false, fov: 62, strafedMsgT: -99 };
+    // yaw / pitch: the eased line of sight, tYaw / tPitch: where the mouse has put it. zoom: 0 (62°) .. 1 (31°),
+    // a gunner's eye leaning into the sight, not binoculars. battery: every mount that bears follows the sight.
+    const st = { manned: false, idx: 0, yaw: 0, pitch: 0.25, tYaw: 0, tPitch: 0.25, zoom: 0, zoomHold: false, fov: 62, battery: false, strafedMsgT: -99 };
+    const AA_FOV_WIDE = 62, AA_FOV_TIGHT = 31;
+    const _sightDir = new THREE.Vector3(), _sightPt = new THREE.Vector3();
     const _mw = new THREE.Vector3(), _dir = new THREE.Vector3(), _aim = new THREE.Vector3(), _p = new THREE.Vector3(), _v = new THREE.Vector3(),
         _l = new THREE.Vector3(), _qi = new THREE.Quaternion(), _eye = new THREE.Vector3();
 
@@ -38,7 +44,7 @@ const AA = (() => {
         const pl = Air.hitTest(a, b);
         if (pl) return pl;
         if (b.y < 30) {
-            const e = enemyHitTest(b);
+            const e = enemyHitTest(b, 0, true);
             if (e) return e;
             if (b.y < 60) { const s = Islands.structureAt(b); if (s) return s; }
         }
@@ -49,17 +55,20 @@ const AA = (() => {
         return {
             color: gun.color, drag: gun.drag, life: gun.life, size: gun.size, fade: true,
             test: roundHits,
-            onHit: (hit, p) => {
+            onHit: (hit, p, prev) => {
                 if (hit.isAir) Air.damage(hit, gun.dmg * rnd(0.75, 1.3), p, st.manned && mounts[st.idx] === m ? 'you' : m.name);
                 else if (hit.isStructure) { FX.spark(p, 6); Islands.impact(p, small, hit, true); }
                 else {
                     FX.spark(p, 6);
+                    if (m.kind === 40) FX.flak(p, 0.12);
+                    Wreck.bullet(hit.obj, prev, p, m.kind === 40 ? 0.42 : 0.2);
+                    if (hit.sinking) return;
                     if (hit.typeKey === 'barge') damageEnemy(hit, small * 3, p);
                     else { hit.hp -= small * 0.3; if (hit.hp <= 0) damageEnemy(hit, 0.01, p); }
                 }
             },
             onLand: p => { FX.dirt(p, m.kind === 40 ? 0.1 : 0.04); Islands.impact(p, small, null, true); },
-            onWater: p => FX.smallSplash(p.x, waterHeight(p.x, p.z, simTime), p.z, m.kind === 40 ? 1 : 0.6),
+            onWater: p => FX.aaSplash(p.x, waterHeight(p.x, p.z, simTime), p.z, m.kind === 40),
             burst: m.kind === 40 ? p => FX.flak(p, 0.3) : null
         };
     }
@@ -114,7 +123,7 @@ const AA = (() => {
             life: 0.06, s0: m.kind === 40 ? 1.6 : 0.9, s1: m.kind === 40 ? 2.6 : 1.4, r: 1, g: 0.75, b: 0.35, a: 1, drag: 8, grav: 0 });
         if (Math.random() < 0.5) smokeFx.emit({ x: _p.x, y: _p.y, z: _p.z, vx: phys.vel.x * 0.6 + _dir.x * 4, vy: 1 + _dir.y * 4, vz: phys.vel.z * 0.6 + _dir.z * 4,
             life: rnd(1, 2.2), s0: 0.6, s1: m.kind === 40 ? 4 : 2.5, r: 0.85, g: 0.84, b: 0.82, a: 0.3, drag: 1.5, grav: -0.2 });
-        if (loudFactor > 1) playBurst(_p, 1, 0, gun.loud * loudFactor, gun.pitch);   // our own gun: every report, right now
+        if (loudFactor > 1) playAutoGun(_p, 1, 0, gun.loud * loudFactor, m.kind);   // our own gun: every report, right now
         else m.rounds++;
     }
 
@@ -132,6 +141,15 @@ const AA = (() => {
             trainRate = gun.manTrain * DEG; elevRate = gun.manElev * DEG;
             m.cut = blocked(m, _l);
             wantFire = AA.trigger && m.disabled <= 0 && Game.running;
+        } else if (st.manned && st.battery && Game.running && m.disabled <= 0) {
+            // Slaved to the pointer's sight: lay on the point it is looking at (the plane nearest the sight
+            // line, else 900 m out along it), each mount from its own position
+            _l.subVectors(_sightPt, _mw).normalize().applyQuaternion(_qi);
+            tYaw = Math.atan2(_l.x, _l.z); tEl = Math.asin(THREE.MathUtils.clamp(_l.y, -1, 1));
+            trainRate = gun.manTrain * DEG * 0.8; elevRate = gun.manElev * DEG * 0.8;
+            m.cut = blocked(m, _l);
+            wantFire = AA.trigger && Game.running;
+            aligned = false;
         } else if (Settings.ctl.aaAuto && Game.running && m.disabled <= 0) {
             m.retarget -= dt;
             if (m.retarget <= 0 || (m.target && !m.target.alive)) {
@@ -163,9 +181,19 @@ const AA = (() => {
             } else m.target = null;
         }
         const dYaw = wrapAngle(tYaw - m.yaw);
-        m.yaw = wrapAngle(m.yaw + THREE.MathUtils.clamp(dYaw, -trainRate * dt, trainRate * dt));
+        const step = THREE.MathUtils.clamp(dYaw, -trainRate * dt, trainRate * dt);
+        m.yaw = wrapAngle(m.yaw + step);
         tEl = THREE.MathUtils.clamp(tEl, -0.09, 1.5);
+        const e0 = m.el;
         m.el = stepToward(m.el, tEl, elevRate * dt);
+        // Traverse: the Bofors' power drive whines, the hand-trained Oerlikon creaks
+        const work = Math.abs(step) / (gun.train * DEG * dt) * 0.5 + 0.4 * Math.abs(m.el - e0) / (gun.elev * DEG * dt);
+        if (work > 0.03 && dt > 0) {
+            const near = 1 / (1 + _mw.distanceTo(camera.position) / (manned ? 6 : 18));
+            GunDrive.add(m.kind === 40 ? 'b40' : 'o20', Math.min(1.5, work) * near * (manned ? 1 : 0.6), Math.min(1, Math.abs(step) / (trainRate * dt)));
+        }
+        const moving = m.moving ? work > 0.03 : work > 0.15;
+        if (moving !== !!m.moving) { m.moving = moving; if (m.kind === 40 && simTime - (m.clunkT || -9) > 0.8) { m.clunkT = simTime; GunDrive.clunk(_mw, false); } }
         m.obj.rotation.y = m.yaw;
         m.cradle.rotation.x = -m.el;
         if (!aligned) aligned = Math.abs(wrapAngle(tYaw - m.yaw)) < 0.035 && Math.abs(tEl - m.el) < 0.035;
@@ -178,7 +206,7 @@ const AA = (() => {
         m.soundT -= dt;
         if (m.soundT <= 0) {
             m.soundT = 0.3;
-            if (m.rounds > 0) { playBurst(_mw, m.rounds, 0.3 / m.rounds, gun.loud, gun.pitch); m.rounds = 0; }
+            if (m.rounds > 0) { playAutoGun(_mw, m.rounds, 0.3 / m.rounds, gun.loud, m.kind); m.rounds = 0; }
         }
     }
 
@@ -212,16 +240,19 @@ const AA = (() => {
         aimAlongMount(m);
         const plane = Air.planes.find(p => p.alive);
         if (plane) { m.cradle.getWorldPosition(_mw); _dir.subVectors(plane.pos, _mw).normalize(); st.yaw = Math.atan2(_dir.x, _dir.z); st.pitch = Math.asin(_dir.y); }
-        st.fov = 62;
+        st.tYaw = st.yaw; st.tPitch = st.pitch;
+        st.fov = AA_FOV_WIDE;
+        st.zoom = 0;
         setCameraMode('aa');
         document.body.classList.add('aaview');
-        hudMessage(`On the ${m.name} ${m.gun.name}. ${Settings.touchUI ? 'Drag to aim, hold FIRE.' : 'Mouse aims · click / Space fires · right mouse zooms · Q/E next gun · X locks the plane for the 5" · G leaves'}`, 'info');
+        hudMessage(`On the ${m.name} ${m.gun.name}. ${Settings.touchUI ? 'Drag to aim, hold FIRE.' : 'Mouse aims · click / Space fires · wheel / right mouse zooms · R: all guns follow your sight · Q next gun (Shift+Q back) · X locks the plane for the 5" · G leaves. The captain has the conn.'}`, 'info');
     }
     function leave() {
         if (!st.manned) return;
         st.manned = false;
         AA.trigger = false;
-        st.zoom = false;
+        st.zoom = 0;
+        st.zoomHold = false;
         document.body.classList.remove('aaview');
         if (document.pointerLockElement) document.exitPointerLock();
         camera.fov = 45;
@@ -236,8 +267,24 @@ const AA = (() => {
     }
     function look(dYaw, dPitch) {
         if (!st.manned) return;
-        st.yaw = wrapAngle(st.yaw + dYaw);
-        st.pitch = THREE.MathUtils.clamp(st.pitch + dPitch, -0.12, 1.5);
+        st.tYaw += dYaw;
+        st.tPitch = THREE.MathUtils.clamp(st.tPitch + dPitch, -0.12, 1.5);
+    }
+    // Where the slaved mounts converge: the plane nearest the pointer's sight line (at its lead point), else a
+    // point 900 m out along it
+    function updateSightPoint() {
+        const cp = Math.cos(st.pitch);
+        _sightDir.set(Math.sin(st.yaw) * cp, Math.sin(st.pitch), Math.cos(st.yaw) * cp);
+        const m = mounts[st.idx];
+        m.cradle.getWorldPosition(_eye);
+        let best = null, bd = 0.12;
+        for (const p of Air.planes) {
+            if (!p.alive) continue;
+            const a = _v.subVectors(p.pos, _eye).angleTo(_sightDir);
+            if (a < bd && p.pos.distanceTo(_eye) < m.gun.range * 1.5) { bd = a; best = p; }
+        }
+        if (best) lead(m, best, _eye, _sightPt);
+        else _sightPt.copy(_eye).addScaledVector(_sightDir, 900);
     }
     function updateCamera(dt) {
         const m = mounts[st.idx];
@@ -246,7 +293,8 @@ const AA = (() => {
         _eye.set(m.kind === 40 ? 0.85 : 0.0, m.kind === 40 ? 2.0 : 1.75, m.kind === 40 ? -1.1 : -0.85);
         camera.position.copy(m.obj.localToWorld(_eye));
         camera.rotation.set(st.pitch, st.yaw + Math.PI, 0, 'YXZ');
-        st.fov += ((st.zoom ? 22 : 62) - st.fov) * Math.min(1, dt * 12);
+        const z = st.zoomHold ? Math.max(st.zoom, 0.7) : st.zoom;
+        st.fov += (lerp(AA_FOV_WIDE, AA_FOV_TIGHT, z) - st.fov) * Math.min(1, dt * 12);
         if (Math.abs(camera.fov - st.fov) > 0.01) { camera.fov = st.fov; camera.updateProjectionMatrix(); }
         camera.updateMatrixWorld(true);
     }
@@ -256,21 +304,26 @@ const AA = (() => {
         el.addEventListener('pointerdown', e => {
             if (!st.manned || e.pointerType === 'touch') return;
             ensureAudio();
-            if (document.pointerLockElement !== el && el.requestPointerLock) el.requestPointerLock();
+            if (document.pointerLockElement !== el) lockPointer(el);
             if (e.button === 0) AA.trigger = true;
-            if (e.button === 2) st.zoom = true;
+            if (e.button === 2) st.zoomHold = true;
         });
         window.addEventListener('pointerup', e => {
             if (e.pointerType === 'touch') return;
             if (e.button === 0 && st.manned) AA.trigger = false;
-            if (e.button === 2) st.zoom = false;
+            if (e.button === 2) st.zoomHold = false;
         });
         window.addEventListener('mousemove', e => {
             if (!st.manned || !Number.isFinite(e.movementX)) return;
             if (document.pointerLockElement !== el && !(e.buttons & 1)) return;   // without the pointer captured, drag to aim
-            const k = 0.0021 * st.fov / 62 * Settings.ctl.lookSens;
+            const k = 0.0021 * st.fov / 62 * zoomSens(st.fov) * Settings.ctl.lookSens;
             look(-e.movementX * k, -e.movementY * k);
         });
+        el.addEventListener('wheel', e => {
+            if (!st.manned) return;
+            e.preventDefault();
+            st.zoom = clamp01(st.zoom + (e.deltaY > 0 ? -0.2 : 0.2));
+        }, { passive: false });
         el.addEventListener('contextmenu', e => { if (st.manned) e.preventDefault(); });
     }
 
@@ -355,7 +408,7 @@ const AA = (() => {
         ctx.textAlign = 'center';
         ctx.fillStyle = 'rgba(0,0,0,0.55)';
         ctx.font = '12px Consolas, monospace';
-        const lines = [`${m.name.toUpperCase()} · ${m.gun.name.toUpperCase()}${m.kind === 40 ? ' TWIN' : ''}`];
+        const lines = [`${m.name.toUpperCase()} · ${m.gun.name.toUpperCase()}${m.kind === 40 ? ' TWIN' : ''}${st.battery ? ' · ALL MOUNTS ON YOUR SIGHT' : ''} · ${(AA_FOV_WIDE / st.fov).toFixed(1)}×`];
         if (m.disabled > 0) lines.push('CREW DOWN — Q / E: another gun');
         else if (m.cut) lines.push('CUT-OUT: CAN\'T FIRE INTO THE SHIP');
         else if (best) lines.push('PUT THE GREEN PIP IN THE CENTRE');
@@ -374,6 +427,11 @@ const AA = (() => {
         if (!mounts.length) return;
         _qi.copy(phys.quat).invert();
         if (st.manned && (!Game.running || playerDmg.sinking)) leave();
+        if (st.manned) {
+            st.yaw = easeLook(st.yaw, st.tYaw, dt);
+            st.pitch = easeLook(st.pitch, st.tPitch, dt);
+            if (st.battery) updateSightPoint();
+        }
         mounts.forEach((m, i) => updateMount(m, dt, st.manned && i === st.idx));
     }
 
@@ -392,7 +450,12 @@ const AA = (() => {
         get mount() { return mounts[st.idx]; },
         mounts, init, update, reset, enter, leave, cycle, look, updateCamera, drawSight, strafed, knockOut, repairAll,
         toggleManned() { if (st.manned) leave(); else enter(); },
-        toggleZoom() { st.zoom = !st.zoom; },
+        toggleZoom() { st.zoom = st.zoom > 0.3 ? 0 : 0.6; },
+        toggleBattery() {
+            st.battery = !st.battery;
+            hudMessage(st.battery ? 'All light AA mounts that bear follow your sight and fire with you' : 'The other mounts are back on their own crews', 'info');
+        },
+        get battery() { return st.battery; },
         blocked, lead
     };
 })();

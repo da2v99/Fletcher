@@ -6,14 +6,14 @@
 // what trips phone GPU watchdogs.
 const CLOUD_Q = [
     { size: 128, steps: 0, every: 8 },
-    { size: 160, steps: 40, every: 2 },
-    { size: 256, steps: 72, every: 1 },
-    { size: 320, steps: 110, every: 1 }
+    { size: 192, steps: 40, every: 2 },
+    { size: 320, steps: 72, every: 1 },
+    { size: 448, steps: 110, every: 1 }
 ];
 
 const Clouds = (() => {
     let q = Settings.gfx.clouds, SIZE = CLOUD_Q[q].size;
-    let rt, cubeCam, skyScene, skyMesh, face = 0, dirtyFaces = 6, frame = 0;
+    let rt, cubeCam, skyScene, skyMesh, face = 0, dirtyFaces = 6, frame = 0, domeMat = null;
 
     const cloudU = Object.assign({}, WEATHER_U, { uFlash: { value: 0 }, uCover: { value: 0.6 } });   // flashes are added live, not baked
 
@@ -55,16 +55,16 @@ const Clouds = (() => {
             float n = fbm3(uv) * 0.65 + fbm3(uv * 2.7 + 3.1) * 0.35;
             float cov = smoothstep(0.62 - uCover * 0.22, 0.95 - uCover * 0.2, n) * smoothstep(0.0, 0.12, rd.y);
             float dawn0 = 1.0 - smoothstep(0.05, 0.45, uSunDir.y);
-            float bright0 = mix(0.45, 1.0, smoothstep(-0.1, 0.3, uSunDir.y));
+            float bright0 = mix(0.45, 1.0, smoothstep(-0.1, 0.3, uSunDir.y)) * (1.0 - 0.85 * nightF());
             vec3 cc = mix(vec3(1.0, 0.98, 0.95), uSunCol * vec3(1.0, 0.86, 0.8), dawn0 * 0.7) * bright0 * (1.0 - 0.45 * uStorm);
             cc = mix(cc, mix(vec3(0.24, 0.29, 0.38), vec3(0.10, 0.11, 0.13), uStorm) * bright0, smoothstep(0.7, 1.0, n));
-            float haze0 = (1.0 - smoothstep(0.0, 0.3, rd.y)) * 0.65;
+            float haze0 = (1.0 - smoothstep(0.0, 0.3, rd.y)) * 0.65 + (1.0 - smoothstep(0.0, 0.05, rd.y)) * 0.35;
             cc = mix(cc, sky, haze0);
             gl_FragColor = vec4(mix(sky, cc, cov * 0.9), cov);
 #else
 
             float dawn = 1.0 - smoothstep(0.05, 0.45, uSunDir.y);
-            float bright = mix(0.45, 1.0, smoothstep(-0.1, 0.3, uSunDir.y));
+            float bright = mix(0.45, 1.0, smoothstep(-0.1, 0.3, uSunDir.y)) * (1.0 - 0.85 * nightF());
             float sd = max(dot(rd, uSunDir), 0.0);
             vec3 sunL = normalize(vec3(uSunDir.x, max(uSunDir.y, 0.05), uSunDir.z));
             vec3 litCol = mix(vec3(1.0, 0.99, 0.97), uSunCol * vec3(1.0, 0.86, 0.8), dawn * 0.7) * bright * (1.0 - 0.45 * uStorm);
@@ -73,7 +73,7 @@ const Clouds = (() => {
 
             vec3 ro = vec3(0.0, -1.0, 0.0);
             vec4 rez = vec4(0.0);
-            float t = 1.0 + hash12(gl_FragCoord.xy) * 0.5;
+            float t = 1.0 + fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) * 0.5;
             float stride = 110.0 / float(STEPS);
             for (int i = 0; i < STEPS; i++) {
                 if (rez.a > 0.99 || t > 70.0) break;
@@ -90,7 +90,7 @@ const Clouds = (() => {
                 t += (0.05 + t * 0.025) * stride;
             }
             // Aerial perspective: low clouds dissolve into the horizon haze
-            float haze = (1.0 - smoothstep(0.0, 0.3, rd.y)) * 0.65;
+            float haze = (1.0 - smoothstep(0.0, 0.3, rd.y)) * 0.65 + (1.0 - smoothstep(0.0, 0.05, rd.y)) * 0.35;
             rez.rgb = mix(rez.rgb, sky * rez.a, haze);
             gl_FragColor = vec4(sky * (1.0 - rez.a) + rez.rgb, rez.a);
 #endif
@@ -131,6 +131,7 @@ const Clouds = (() => {
         if (CLOUD_Q[q].size !== SIZE) {
             SIZE = CLOUD_Q[q].size;
             rt.setSize(SIZE, SIZE);
+            if (domeMat) domeMat.uniforms.uTexelAng.value = Math.PI / 2 / SIZE;
         }
         dirtyFaces = 6;
     }
@@ -165,7 +166,7 @@ const Clouds = (() => {
     // The visible sky: the cube map, plus the sun disc (hidden by cloud) and live lightning flashes
     function createSkyDome(cubeTex) {
         const mat = new THREE.ShaderMaterial({
-            uniforms: Object.assign({ uSkyCube: { value: cubeTex } }, WEATHER_U),
+            uniforms: Object.assign({ uSkyCube: { value: cubeTex }, uTexelAng: { value: Math.PI / 2 / SIZE } }, WEATHER_U),
             vertexShader: `
                 varying vec3 vDir;
                 void main() { vDir = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
@@ -176,10 +177,20 @@ const Clouds = (() => {
                 uniform vec3 uSunCol;
                 uniform float uStorm;
                 uniform float uFlash;
+                uniform float uTexelAng;
                 varying vec3 vDir;
                 void main() {
                     vec3 d = normalize(vDir);
-                    vec4 s = textureCube(uSkyCube, d);
+                    // The cube is a few hundred texels a face and the view magnifies it: a small rotated tent
+                    // filter hides its texels and the raymarch's dither, so cloud edges stay soft, not blocky
+                    vec3 ta = normalize(cross(d, abs(d.y) < 0.95 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0)));
+                    vec3 tb = cross(d, ta);
+                    float r = uTexelAng * 0.85;
+                    vec4 s = textureCube(uSkyCube, d) * 0.28
+                        + textureCube(uSkyCube, normalize(d + (ta * 0.95 + tb * 0.31) * r)) * 0.18
+                        + textureCube(uSkyCube, normalize(d + (-ta * 0.31 + tb * 0.95) * r)) * 0.18
+                        + textureCube(uSkyCube, normalize(d + (-ta * 0.95 - tb * 0.31) * r)) * 0.18
+                        + textureCube(uSkyCube, normalize(d + (ta * 0.31 - tb * 0.95) * r)) * 0.18;
                     float sd = dot(d, uSunDir);
                     vec3 col = s.rgb + uSunCol * smoothstep(0.9994, 0.9997, sd) * 4.0 * (1.0 - uStorm * 0.95) * (1.0 - s.a) * step(0.0, d.y);
                     col += vec3(0.75, 0.8, 1.0) * uFlash * (0.4 + 0.6 * smoothstep(0.0, 0.3, d.y)) * (0.5 + s.a);
@@ -191,6 +202,7 @@ const Clouds = (() => {
         const dome = new THREE.Mesh(new THREE.SphereGeometry(40000, 48, 24), mat);
         dome.frustumCulled = false;
         dome.renderOrder = -1;
+        domeMat = mat;
         return dome;
     }
 

@@ -15,11 +15,13 @@ Screen" runs it fullscreen.
 | Mouse | Third-person gun crosshair: the 5"/38s train on whatever is under it (a ship, the shore, the sea, or max range above the horizon) |
 | X | Lock what's under the crosshair: a ship, a shore target (gun, AA pit, building, truck) or a plane is tracked with lead; a point of sea or shore stays put. X on the current lock releases it |
 | Space | Fire the 5"/38s at the director's target (also left-click in the captain's view). Locked on a plane they fire VT proximity-fuzed shells |
-| Left drag / right drag / wheel | Pan / orbit / zoom the camera (a drag in chase view switches to orbit) |
+| Left click | Gun-aim camera: the mouse is captured and orbits the camera round the ship, the crosshair sits fixed in the centre (sub-pixel aim). Click / Space fires, right mouse holds a 3× zoom, wheel sets the distance, X locks, Esc frees the mouse |
+| Right drag / middle drag / wheel | Orbit / pan / zoom the camera (a drag in chase view switches to orbit) |
 | B | Captain's view on the bridge: mouse look, right-click / Z / wheel = binoculars, X locks the target under the reticle |
-| G | Man an AA gun (the 40 mm or 20 mm that best covers the nearest plane). Mouse aims, click / Space fires, right mouse or Z zooms, Q / E next gun, X locks the plane in your sight for the 5"/38s, G leaves |
+| G | Man an AA gun (the 40 mm or 20 mm that best covers the nearest plane). Mouse aims, click / Space fires, wheel or right mouse / Z for a little magnification (up to 2×), R: every mount that bears follows your sight and fires with you, Q next gun (Shift+Q back), X locks the plane in your sight for the 5"/38s, G leaves. The AI captain has the conn and the 5"/38s meanwhile |
+| E | Step out onto the deck yourself, from any view (see On foot below); E again (with nothing to use in front of you) returns to the ship view |
 | T | Train out a torpedo mount and fire a 5-torpedo spread |
-| Q / E | Move between port wing, open bridge, starboard wing (captain's view) |
+| Q / R | Move between port wing, open bridge, starboard wing (captain's view) |
 | C | Chase / orbit camera (leaves the captain's view or the AA gun) |
 | Esc / P | Pause, settings |
 
@@ -61,6 +63,74 @@ A rigid body floated by 57 buoyancy columns along the hull:
   and ride every wave; in very steep seas a hull under ~5 t can capsize, and a game assist rights it after 1.5 s.
 - The macro swell runs at deep-water speed for its wavelength (ω = √(gk)).
 
+## Aiming
+All mouse look (binoculars, AA sight, gun-aim camera, on foot) uses pointer lock with raw, unaccelerated mouse
+counts where the browser offers them, and is sub-pixel: the mouse moves a target angle and the view eases onto it
+within a frame or two, so it glides through every in-between angle rather than stepping a whole count at a time.
+Sensitivity scales with the field of view, a little more finely at high magnification, and aim is taken along an
+exact ray through the screen centre.
+
+## The 5"/38s against aircraft
+The 5"/38 was a dual-purpose gun: the mounts elevate to 85° and the Mk 37 director computes a lead on aircraft, so
+a plane under the crosshair (or locked) gets VT proximity-fuzed shells that burst as they pass it. The AI captain
+fires them at attacking planes too, as the real ships did; they were the most effective heavy AA of the war.
+
+## The AI captain
+While you are on an AA gun or on foot, the captain has the conn: closes surface contacts and fights them
+broadside on with a weave, combs torpedo tracks, swings hard under diving bombers, keeps off the shoals, and fights
+the 5"/38s (your own director lock wins; otherwise the most dangerous target in range, planes boring in first).
+Your A / D still override the rudder while held. If you go over the side with no enemy about, the captain comes about for
+you and stops (man overboard).
+
+## On foot
+**E** puts you on deck (on the bridge if you were in the captain's view, beside the gun if you were on one).
+**WASD** walk, **Shift** run, **Space** jumps or climbs a low wall (deckhouses, the bridge, the open bridge on the
+pilothouse roof), **mouse** looks, **E** (or F)
+uses what is in front of you: man the AA gun beside you, take the conn on the bridge, lower the whaleboat at the
+starboard davits. Jump the lifelines to go over the side. In the water: **WASD** swim, **C / Ctrl** dive,
+**Space** rise (watch your breath), **E** climbs a scramble net back aboard or into the whaleboat; swim to an
+island and you wade ashore. In the boat: **W / S** row, **A / D** turn, **Shift** pull hard, **E** over the side.
+
+When she goes down you play on: you're on your feet wherever you were (on the bridge, beside your gun, or on
+deck), the whaleboat is put in the water, and there's no game-over screen (Esc has the menu and Restart). Stay
+aboard and you go down with her: the light fails as you sink, the murk closes in, air pours out of the hull, she settles on the bottom
+(70 m) and the fish come to look; **Space** lets go and you swim for the surface. Keyboard and mouse only.
+
+## Destruction
+- **Where it struck:** every hit is found on the actual mesh, along the round's path, so the damage lands exactly
+  there: hull, deckhouse, funnel, bridge, a gun shield.
+- **Holes:** shells and torpedoes cut real, jagged holes through the plating (scorched round the edges; you see
+  the dark inside of the hull through them), in every ship's own frame so they roll with her. Thin superstructure
+  plating loses whole chunks; the hull's side plating is holed and pushed in.
+- **Dents:** each hit pushes the plating in round it, a crumpled crater in the mesh itself.
+- **Bullet holes:** 20 mm, 40 mm, shore 25 mm and the Zeros' guns pock the plating with holes chipped back to
+  bare steel.
+- **Wrecks:** a ship going down (and both halves of a broken one) still stops rounds and torpedoes, and keeps
+  tearing apart under fire.
+- **Sag and breaking:** damage to the keel (low and amidships hurts most) bends the whole hull, ends rising. Enough
+  of it breaks her in two: a torpedo amidships can do it to a destroyer, two to the Fletcher, and an enemy
+  warship that blows up often goes in two. The halves pivot about the torn break, ends climbing out of the water,
+  and go down fast.
+- **Wreckage:** torn plate, beams, machinery, lockers, planks, drums and life rings fly out of every hit, tumble and
+  smoke. In the water, wood, drums, floats and anything with air trapped in it float for a minute or two: they sit
+  at their own waterline, lie along the wave and drift downwind. Steel goes down after a moment, tumbling into the
+  murk until it's lost from sight. Badly hurt warships can have a gun mount blown clean off.
+- **Splashes:** a 5" shell throws a ~90 m white column that keeps building, spreads, collapses in a curtain of
+  spray and leaves mist; 40 mm and 20 mm rounds throw ~30 m and ~20 m plumes, a torpedo ~150 m. No two are alike:
+  each has its own height, one to four jets, a lean with the wind and a lopsided crown, and every spray sprite has
+  its own shape and rotation.
+
+## Sound
+All synthesised. The 5"/38s boom; the 40 mm Bofors "pom" and the 20 mm Oerlikon bark have a crack, muzzle blast,
+breech clank and a tail rolling off over the water. The mounts can be heard training: the 5"/38s' electric-hydraulic
+drive (a hum and a motor whine that climbs with the slewing speed, gear grind, hydraulic hiss), the Bofors' power
+drive, the Oerlikons' creak, and a clunk as each takes up or comes to rest.
+
+## Sky
+Stars are individual points (about 14,000, with a Milky Way band and its dark rift) drawn at screen resolution,
+fading in after sunset, twinkling low down and hidden by cloud; the time slider now runs into full night
+(04:24-19:36). The cloud cube is sharper and its texels are filtered away.
+
 ## Islands
 Volcanic jungle islands and low palm islets, generated from a fixed seed in 8 km sectors and streamed in around the
 ship. Each is a height field: shells dig craters and scorch it, trees within a blast fall and burn, and the sea floor
@@ -82,12 +152,12 @@ flight and drop, need a moment to get on, and can't fire into the ship), or take
 |---|---|
 | `core/` | Ship constants, math helpers, geometry helpers, saved settings and graphics presets |
 | `ship/` | The Fletcher model: hull lines, fittings, assembly |
-| `env/` | `sea.js` wave model (shared by GPU and CPU), `ocean.js` surface shader, `clouds.js` volumetric sky, `weather.js`, `shipWaves.js` (Kelvin wake) |
+| `env/` | `sea.js` wave model (shared by GPU and CPU), `ocean.js` surface shader, `clouds.js` volumetric sky, `stars.js`, `underwater.js` (murk, fish), `weather.js`, `shipWaves.js` (Kelvin wake) |
 | `physics/` | Rigid-body buoyancy and handling, flooding |
-| `fx/` | Particles (spray, smoke, fire), tracers, synthesised audio, post-processing and the renderer |
-| `combat/` | Ballistics and shells, torpedoes, enemy ship models and AI, aircraft and air raids, our 5"/38s, torpedoes and AA battery, damage model |
+| `fx/` | Particles (spray, smoke, fire), debris and hull damage, tracers, synthesised audio, post-processing and the renderer |
+| `combat/` | Ballistics and shells, torpedoes, enemy ship models and AI, aircraft and air raids, our 5"/38s, torpedoes and AA battery, the AI captain, damage model |
 | `world/` | Islands: terrain, jungle, bases and their garrisons |
-| `view/` | Cameras and the captain's binocular view |
+| `view/` | Cameras, aiming, the captain's binocular view, and you on foot |
 | `ui/` | HUD, SG radar scope, menus, settings panel, touch controls |
 | `game.js`, `main.js` | Game flow and the main loop |
 
@@ -97,7 +167,10 @@ Scripts are plain (non-module) files loaded in order by `index.html`, so the gam
 `env/sea.js` uses the wave functions from `../Waves and Clouds` (16 golden-ratio Gerstner waves, the warped chop/ridge
 detail layer, the macro swell, and the height-gradient colouring) scaled from the example's units into metres for the
 chosen sea state. `waterHeight()` evaluates exactly the same maths on the CPU, so buoyancy, shell splashes and
-torpedo depth match the surface you see.
+torpedo depth match the surface you see. On top, for shading only, the ocean shader adds short wind waves and
+ripples per pixel: octaves of gradient noise, each stretched along its crests, turned to its own heading round
+the wind and drifting at its own deep-water speed, with their strength varying in big soft gust patches, so the
+small waves don't repeat.
 
 ## License
 Fletcher © 2026 [da2v99](https://github.com/da2v99), licensed under

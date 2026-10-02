@@ -59,7 +59,7 @@ function updateTorpedoes(dt, t) {
             Islands.impact(p, 2.5, null, tp.owner === 'player');
             hit = true;
         } else if (tp.owner === 'player') {
-            hit = enemyHitTest(tp.pos, 3);
+            hit = enemyHitTest(tp.pos, 3, true);
             if (hit) onEnemyTorpedoHit(hit, tp.pos.clone().setY(surface));
         } else {
             if (playerHitTest(tp.pos, 1.5)) {
