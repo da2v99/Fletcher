@@ -78,6 +78,8 @@ function onPlayerTorpedoHit(p) {
 
 function onEnemyShellMiss(p) {
     const d = p.distanceTo(phys.pos);
+    // A close one: the blast through the water makes her plating shudder
+    if (d < 70) Wreck.shake(myShip, myShip.worldToLocal(p.clone()), 0.012 + 0.035 * (1 - d / 70));
     if (d < 140 && simTime - playerDmg.lastNearMiss > 4) {
         playerDmg.lastNearMiss = simTime;
         hudMessage(d < 60 ? 'Straddled!' : 'Near miss!', 'warn');

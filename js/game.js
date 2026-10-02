@@ -231,6 +231,7 @@ const Game = {
         this.hostile = false;
         drive.order = STOP_IDX;
         drive.cmd = null;
+        phys.engine = 0;   // the engine rooms flood: no more power
         if (Person.active) return;
         if (captain.active) setCaptain(false);
         if (document.pointerLockElement) document.exitPointerLock();

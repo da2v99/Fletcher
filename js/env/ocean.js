@@ -295,7 +295,7 @@ function oceanShaders(q) {
                     vec3 N = normalize(cross(tz, tx));
                     vec2 rg = seaRipples(vWorld.xz, uTime, fp);
                     N = normalize(N + vec3(-rg.x, 0.0, -rg.y) * N.y);
-                    if (uUnder > 0.5 && !gl_FrontFacing) { gl_FragColor = vec4(underSurface(vWorld, N), 1.0); return; }
+                    if (!gl_FrontFacing) { gl_FragColor = vec4(underSurface(vWorld, N), 1.0); return; }
                     vec4 fw = shipFoamWake(vWorld, hs);
                     gl_FragColor = vec4(shadeSea(vWorld, p0, N, seaColorHeight(p0, uTime), fw, islandShore(vWorld.xz)), 1.0);
                 }`
@@ -344,7 +344,7 @@ function oceanShaders(q) {
                 // Per-pixel wind waves and ripples on top of the per-vertex surface
                 vec2 rg = seaRipples(vWorld.xz, uTime, length(fwidth(vXZ0)));
                 N = normalize(N + vec3(-rg.x, 0.0, -rg.y) * N.y);
-                if (uUnder > 0.5 && !gl_FrontFacing) { gl_FragColor = vec4(underSurface(vWorld, N), 1.0); return; }
+                if (!gl_FrontFacing) { gl_FragColor = vec4(underSurface(vWorld, N), 1.0); return; }
                 vec4 fw = shipFoamWake(vWorld, vHS);
                 gl_FragColor = vec4(shadeSea(vWorld, vXZ0, N, vHC, fw, vShore), 1.0);
             }`
