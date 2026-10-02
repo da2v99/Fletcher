@@ -230,6 +230,7 @@ function animate() {
     Clouds.update(renderer);
     skyDome.position.copy(camera.position);
     Stars.update();
+    updateFogColor();
     Underwater.update(realDt, simTime);
 
     Gfx.render(realDt * 1000, simTime);

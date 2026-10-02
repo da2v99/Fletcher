@@ -54,29 +54,39 @@ function createParticleSystem(maxCount, blending, texture = 'soft') {
     geo.setAttribute('psize', new THREE.BufferAttribute(size, 1));
     geo.setAttribute('palpha', new THREE.BufferAttribute(alpha, 1));
     const mat = new THREE.ShaderMaterial({
-        uniforms: { map: { value: particleTexture(texture) }, scale: { value: 800 } },
+        // Fog: the scene's own colour object (shared, so it follows the weather and the view) and density
+        uniforms: { map: { value: particleTexture(texture) }, scale: { value: 800 }, fogCol: { value: scene.fog.color }, fogDen: { value: 0 },
+            additive: { value: blending === THREE.AdditiveBlending ? 1 : 0 } },
         vertexShader: `
             attribute vec3 pcolor;
             attribute float psize;
             attribute float palpha;
             uniform float scale;
+            uniform float fogDen;
             varying vec3 vC;
             varying float vA;
+            varying float vFog;
             void main() {
                 vC = pcolor; vA = palpha;
                 vec4 mv = modelViewMatrix * vec4(position, 1.0);
+                float fd = -mv.z * fogDen;
+                vFog = 1.0 - exp(-fd * fd);
                 gl_PointSize = psize * scale / max(-mv.z, 0.1);
                 gl_Position = projectionMatrix * mv;
             }
         `,
         fragmentShader: `
             uniform sampler2D map;
+            uniform vec3 fogCol;
+            uniform float additive;
             varying vec3 vC;
             varying float vA;
+            varying float vFog;
             void main() {
                 float a = texture2D(map, gl_PointCoord).a * vA;
+                if (additive > 0.5) a *= 1.0 - vFog;   // glows fade out; smoke and spray take on the haze
                 if (a < 0.003) discard;
-                gl_FragColor = vec4(vC, a);
+                gl_FragColor = vec4(additive > 0.5 ? vC : mix(vC, fogCol, vFog), a);
             }
         `,
         transparent: true,
@@ -102,6 +112,7 @@ function createParticleSystem(maxCount, blending, texture = 'soft') {
         clear() { list.length = 0; },
         update(dt, scaleValue) {
             mat.uniforms.scale.value = scaleValue;
+            mat.uniforms.fogDen.value = scene.fog.density;
             for (let i = list.length - 1; i >= 0; i--) {
                 const p = list[i];
                 p.age += dt;

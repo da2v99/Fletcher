@@ -58,7 +58,7 @@ const Clouds = (() => {
             float bright0 = mix(0.45, 1.0, smoothstep(-0.1, 0.3, uSunDir.y)) * (1.0 - 0.85 * nightF());
             vec3 cc = mix(vec3(1.0, 0.98, 0.95), uSunCol * vec3(1.0, 0.86, 0.8), dawn0 * 0.7) * bright0 * (1.0 - 0.45 * uStorm);
             cc = mix(cc, mix(vec3(0.24, 0.29, 0.38), vec3(0.10, 0.11, 0.13), uStorm) * bright0, smoothstep(0.7, 1.0, n));
-            float haze0 = (1.0 - smoothstep(0.0, 0.3, rd.y)) * 0.65;
+            float haze0 = (1.0 - smoothstep(0.0, 0.3, rd.y)) * 0.65 + (1.0 - smoothstep(0.0, 0.05, rd.y)) * 0.35;
             cc = mix(cc, sky, haze0);
             gl_FragColor = vec4(mix(sky, cc, cov * 0.9), cov);
 #else
@@ -90,7 +90,7 @@ const Clouds = (() => {
                 t += (0.05 + t * 0.025) * stride;
             }
             // Aerial perspective: low clouds dissolve into the horizon haze
-            float haze = (1.0 - smoothstep(0.0, 0.3, rd.y)) * 0.65;
+            float haze = (1.0 - smoothstep(0.0, 0.3, rd.y)) * 0.65 + (1.0 - smoothstep(0.0, 0.05, rd.y)) * 0.35;
             rez.rgb = mix(rez.rgb, sky * rez.a, haze);
             gl_FragColor = vec4(sky * (1.0 - rez.a) + rez.rgb, rez.a);
 #endif
