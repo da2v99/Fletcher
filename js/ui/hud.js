@@ -81,7 +81,7 @@ function drawRadar(dt) {
 
 const STATUS_STYLE = {
     ready: ['#6fe08a', 'READY'], loading: ['#ffd27a', 'LOADING'], training: ['#ffd27a', 'TRAINING'],
-    blocked: ['#7b8794', 'CAN\'T BEAR'], range: ['#ff7b6b', 'NO RANGE'], stowed: ['#7b8794', 'STOWED'], damaged: ['#ff5a4a', 'DAMAGED']
+    blocked: ['#7b8794', 'CAN\'T BEAR'], range: ['#ff7b6b', 'NO RANGE'], stowed: ['#7b8794', 'STOWED'], damaged: ['#ff5a4a', 'DAMAGED'], wrecked: ['#ff5a4a', 'WRECKED']
 };
 
 let hudAcc = 0;

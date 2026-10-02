@@ -211,3 +211,60 @@ function createHullMaterial() {
     };
     return mat;
 }
+
+// What you see through a hole in the hull: transverse frames every 1.2 m standing in from the plating, watertight
+// bulkheads, and the platform deck over the machinery and magazines. Never seen otherwise (the hull hides it).
+function createHullInterior() {
+    const pos = [];
+    const quad = (a, b, c, d) => pos.push(...a, ...b, ...c, ...a, ...c, ...d);
+    const NT = 14;
+    for (let zs = -50; zs <= 52; zs += 1.2) {
+        const bot = keelY(zs), top = sheerY(zs) - 0.1;
+        if (top - bot < 1) continue;
+        [1, -1].forEach(side => {
+            for (let j = 0; j < NT; j++) {
+                const t0 = 0.04 + 0.92 * j / NT, t1 = 0.04 + 0.92 * (j + 1) / NT;
+                const y0 = bot + (top - bot) * t0, y1 = bot + (top - bot) * t1;
+                const x0 = side * (sectionX(zs, t0) - 0.04), x1 = side * (sectionX(zs, t1) - 0.04);
+                const w = 0.28;   // the frame's web, standing in from the plating
+                quad([x0, y0, zs], [x1, y1, zs], [x1 - side * w, y1, zs], [x0 - side * w, y0, zs]);
+            }
+        });
+    }
+    // Watertight bulkheads
+    [-40, -28, -14, -1, 12, 26, 38].forEach(zs => {
+        const bot = keelY(zs) + 0.05, top = sheerY(zs) - 0.12;
+        for (let j = 0; j < NT; j++) {
+            const t0 = j / NT, t1 = (j + 1) / NT;
+            const y0 = bot + (top - bot) * t0, y1 = bot + (top - bot) * t1;
+            const w0 = hullX(zs, y0) - 0.05, w1 = hullX(zs, y1) - 0.05;
+            quad([-w0, y0, zs], [w0, y0, zs], [w1, y1, zs], [-w1, y1, zs]);
+        }
+    });
+    // Platform deck
+    const yp = 0.9;
+    for (let zs = -46; zs < 48; zs += 2) {
+        const w0 = hullX(zs, yp) - 0.05, w1 = hullX(zs + 2, yp) - 0.05;
+        quad([-w0, yp, zs], [w0, yp, zs], [w1, yp, zs + 2], [-w1, yp, zs + 2]);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.computeVertexNormals();
+    return g;
+}
+
+// A simpler inside for the enemy hulls (box-section amidships, where the plating runs straight)
+function createBoxInterior(len, beam, draft, deck) {
+    const pos = [];
+    const quad = (a, b, c, d) => pos.push(...a, ...b, ...c, ...a, ...c, ...d);
+    const zl = len * 0.29, hw = beam / 2 - 0.25, y0 = -draft + 0.3, y1 = deck - 0.2;
+    for (let z = -zl; z <= zl; z += 1.3) {
+        [1, -1].forEach(s => quad([s * hw, y0, z], [s * hw, y1, z], [s * (hw - 0.3), y1, z], [s * (hw - 0.3), y0, z]));
+    }
+    for (let z = -zl; z <= zl + 0.01; z += len / 7) quad([-hw, y0, z], [hw, y0, z], [hw, y1, z], [-hw, y1, z]);
+    quad([-hw, 0.6, -zl], [hw, 0.6, -zl], [hw, 0.6, zl], [-hw, 0.6, zl]);
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.computeVertexNormals();
+    return g;
+}

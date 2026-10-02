@@ -13,7 +13,8 @@ window.addEventListener('load', () => {
     myShip = buildShip(scene);
     // Our hull can hole, dent, sag and break in two (wreck.js): the Fletcher's materials are hers alone
     const hullMat = myShip.children[0].material;
-    Wreck.attach(myShip, { ownMaterials: true, inner: m => m === hullMat || m === MAT.deck, maxTilt: 0.6 });
+    Wreck.attach(myShip, { ownMaterials: true, inner: m => m === hullMat || m === MAT.deck, maxTilt: 0.6, deckY: sheerY,
+        halfDepth: 4.8, midY: 0.6, interior: createHullInterior, onHole: wreckFittings });
     initPhysics();
     resetPhysics();
 

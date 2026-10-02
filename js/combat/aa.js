@@ -180,6 +180,7 @@ const AA = (() => {
                 aligned = false;
             } else m.target = null;
         }
+        if (m.wrecked) { tYaw = m.yaw; tEl = -0.08; wantFire = false; }   // holed: dead, barrels sagging
         const dYaw = wrapAngle(tYaw - m.yaw);
         const step = THREE.MathUtils.clamp(dYaw, -trainRate * dt, trainRate * dt);
         m.yaw = wrapAngle(m.yaw + step);
@@ -263,7 +264,7 @@ const AA = (() => {
         if (!st.manned) return;
         st.idx = (st.idx + d + mounts.length) % mounts.length;
         const m = mounts[st.idx];
-        hudMessage(`${m.name} ${m.gun.name}${m.disabled > 0 ? ' — crew down' : ''}`, 'info');
+        hudMessage(`${m.name} ${m.gun.name}${m.wrecked ? ' — wrecked' : m.disabled > 0 ? ' — crew down' : ''}`, 'info');
     }
     function look(dYaw, dPitch) {
         if (!st.manned) return;
@@ -339,7 +340,7 @@ const AA = (() => {
     function knockOut(local, r) {
         mounts.forEach(m => { if (m.obj.position.distanceTo(local) < r) m.disabled = Math.max(m.disabled, rnd(60, 120)); });
     }
-    function repairAll() { mounts.forEach(m => { m.disabled = 0; }); }
+    function repairAll() { mounts.forEach(m => { if (!m.wrecked) m.disabled = 0; }); }
 
     // ------------------------------------------------------------------ the gunsight
     // Mk 14-style reflector sight: 50 and 100 mil rings, and the computed lead pip on the plane nearest the sight
@@ -409,7 +410,8 @@ const AA = (() => {
         ctx.fillStyle = 'rgba(0,0,0,0.55)';
         ctx.font = '12px Consolas, monospace';
         const lines = [`${m.name.toUpperCase()} · ${m.gun.name.toUpperCase()}${m.kind === 40 ? ' TWIN' : ''}${st.battery ? ' · ALL MOUNTS ON YOUR SIGHT' : ''} · ${(AA_FOV_WIDE / st.fov).toFixed(1)}×`];
-        if (m.disabled > 0) lines.push('CREW DOWN — Q / E: another gun');
+        if (m.wrecked) lines.push('GUN WRECKED — Q: another gun');
+        else if (m.disabled > 0) lines.push('CREW DOWN — Q: another gun');
         else if (m.cut) lines.push('CUT-OUT: CAN\'T FIRE INTO THE SHIP');
         else if (best) lines.push('PUT THE GREEN PIP IN THE CENTRE');
         else if (!Air.planes.some(p => p.alive)) lines.push(Settings.ctl.airRaids === 'off' ? 'AIR RAIDS ARE OFF (CONTROLS)' : 'NO AIRCRAFT · SURFACE AND SHORE TARGETS ONLY');
@@ -438,7 +440,7 @@ const AA = (() => {
     function reset() {
         leave();
         mounts.forEach(m => {
-            Object.assign(m, { yaw: m.stowYaw, el: m.stowEl, target: null, disabled: 0, rounds: 0, fireT: 0 });
+            Object.assign(m, { yaw: m.stowYaw, el: m.stowEl, target: null, disabled: 0, rounds: 0, fireT: 0, wrecked: false });
             m.obj.rotation.y = m.stowYaw;
             m.cradle.rotation.x = -m.stowEl;
         });

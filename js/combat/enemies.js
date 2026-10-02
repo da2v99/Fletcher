@@ -40,7 +40,15 @@ function spawnEnemy(typeKey, x, z, heading) {
     const model = enemyModel(typeKey);
     scene.add(model.group);
     // Her own copy of the materials so her hull can hole, dent, sag and break (wreck.js)
-    Wreck.attach(model.group, { len: model.len, beam: model.beam, sharedGeo: true, inner: m => !!m.vertexColors, maxTilt: model.len > 80 ? 0.5 : 0.7 });
+    const deck = typeKey === 'maru' ? 5.5 : 4.2;
+    Wreck.attach(model.group, { len: model.len, beam: model.beam, sharedGeo: true, inner: m => !!m.vertexColors, maxTilt: model.len > 80 ? 0.5 : 0.7,
+        deckY: () => deck, halfDepth: (type.draft + deck) / 2, midY: (deck - type.draft) / 2,
+        interior: typeKey === 'barge' ? null : () => createBoxInterior(model.len, model.beam, type.draft, deck),
+        onHole: (local, r) => {
+            // A gun mount or launcher holed is wrecked: it stops dead where it was, barrel down
+            model.turrets.forEach(t => { if (!t.userData.wrecked && t.position.distanceTo(local) < r + 2.2) t.userData.wrecked = true; });
+            model.torpLaunchers.forEach(t => { if (t.position.distanceTo(local) < r + 2.2) t.userData.wrecked = true; });
+        } });
     const e = {
         id: ++enemySerial, typeKey, type, model, obj: model.group,
         x, z, heading, speed: type.speed * 0.8, hp: type.hp, alive: true, sinking: false, sinkT: 0,
@@ -176,6 +184,7 @@ function enemyGunnery(e, d, dt) {
     const t = e.model.turrets;
     const rel = wrapAngle(Math.atan2(phys.pos.x - e.x, phys.pos.z - e.z) - e.heading);
     t.forEach(tr => {
+        if (tr.userData.wrecked) { const cr = tr.userData.cradle; if (cr) cr.rotation.x += (0.12 - cr.rotation.x) * Math.min(1, dt); return; }
         const blocked = tr.userData.aft ? Math.abs(rel) < 30 * DEG : Math.abs(rel) > 150 * DEG;
         const aim = blocked ? tr.userData.stowYaw : rel;
         tr.rotation.y += Math.max(-dt * 0.4, Math.min(dt * 0.4, wrapAngle(aim - tr.rotation.y)));
@@ -195,7 +204,7 @@ function enemyGunnery(e, d, dt) {
     const px = phys.pos.x + phys.vel.x * tof, pz = phys.pos.z + phys.vel.z * tof;
     let fired = false;
     t.forEach(tr => {
-        if (Math.abs(wrapAngle(tr.rotation.y - rel)) > 0.08) return;   // not trained on us yet
+        if (tr.userData.wrecked || Math.abs(wrapAngle(tr.rotation.y - rel)) > 0.08) return;   // wrecked, or not trained on us yet
         tr.updateMatrixWorld(true);
         const cr = tr.userData.cradle;
         const muzzle = cr.localToWorld(new THREE.Vector3(0, 0, 5.2));
@@ -219,7 +228,7 @@ function enemyGunnery(e, d, dt) {
 // Long Lance attack: a spread aimed at our predicted position, then turn away
 function enemyTorpedoes(e, d, dt) {
     e.torpCd -= dt;
-    if (e.torps <= 0 || e.torpCd > 0 || d > 8500 || d < 1200 || e.model.torpLaunchers.length === 0) return;
+    if (e.torps <= 0 || e.torpCd > 0 || d > 8500 || d < 1200 || !e.model.torpLaunchers.some(t => !t.userData.wrecked)) return;
     const rel = wrapAngle(Math.atan2(phys.pos.x - e.x, phys.pos.z - e.z) - e.heading);
     if (Math.abs(Math.abs(rel) - Math.PI / 2) > 50 * DEG) return;   // needs a beam-ish angle
     const lead = interceptHeading({ x: e.x, z: e.z }, TORP_TYPES.type93.speed, phys.pos, phys.vel);
@@ -227,7 +236,7 @@ function enemyTorpedoes(e, d, dt) {
     const n = Math.min(4, e.torps);
     e.torps -= n;
     e.torpCd = rnd(70, 110);
-    const launcher = e.model.torpLaunchers[0];
+    const launcher = e.model.torpLaunchers.find(t => !t.userData.wrecked);
     launcher.rotation.y = rel;
     const origin = e.obj.localToWorld(launcher.position.clone());
     for (let k = 0; k < n; k++) {

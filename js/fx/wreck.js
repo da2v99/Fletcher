@@ -83,14 +83,14 @@ const Wreck = (() => {
         }`;
     const FRAG_COLOR = `
         diffuseColor.rgb *= 1.0 - 0.82 * wreckScorch;
-        // The inside of the hull, seen through a hole: the side of the plating facing the camera (screen-space
-        // normal) points into the hull's cross-section rather than out of it
-        #if defined(WRECK_INNER) && __VERSION__ >= 300
-        {
-            vec3 wn = normalize(cross(dFdx(vWreckLocal), dFdy(vWreckLocal)));
-            vec3 outw = vec3(vWreckLocal.x / (uHullDim.x * uHullDim.x), (vWreckLocal.y - uHullDim.z) / (uHullDim.y * uHullDim.y), 0.0);
-            if (dot(wn, outw) < 0.0) diffuseColor.rgb *= 0.2;
-        }
+        // The inside of the hull, seen through a hole: which face is the inside is read from the mesh's own winding
+        // when the ship is set up (1: the front faces point in, 2: the back faces do)
+        #if defined(WRECK_INNER)
+            #if WRECK_INNER == 1
+                if (gl_FrontFacing) diffuseColor.rgb *= 0.2;
+            #else
+                if (!gl_FrontFacing) diffuseColor.rgb *= 0.2;
+            #endif
         #endif`;
 
     function newUniforms() {
@@ -106,32 +106,46 @@ const Wreck = (() => {
         mat.onBeforeCompile = function (sh, r) {
             if (base.prev) base.prev.call(this, sh, r);
             Object.assign(sh.uniforms, U);
-            sh.vertexShader = (base.inner ? '#define WRECK_INNER\n' : '') + sh.vertexShader
+            const def = base.inner ? `#define WRECK_INNER ${base.inner}\n` : '';
+            sh.vertexShader = def + sh.vertexShader
                 .replace('#include <common>', '#include <common>\n' + VERT_DECL)
                 .replace('#include <project_vertex>', '#include <project_vertex>\n' + VERT_BODY);
-            sh.fragmentShader = (base.inner ? '#define WRECK_INNER\n' : '') + sh.fragmentShader
+            sh.fragmentShader = def + sh.fragmentShader
                 .replace('#include <common>', '#include <common>\n' + FRAG_DECL())
                 .replace('void main() {', 'void main() {\n' + FRAG_MAIN())
                 .replace('#include <color_fragment>', '#include <color_fragment>\n' + FRAG_COLOR);
         };
-        mat.customProgramCacheKey = () => base.key0 + (base.inner ? '|wreckI' : '|wreck');
+        mat.customProgramCacheKey = () => base.key0 + '|wreck' + (base.inner || '');
         mat.needsUpdate = true;
         inject.set(mat, base);
         return mat;
     }
     // The material's own shader hook and cache key, taken before we wrap it (clones reuse the original's)
-    const baseOf = (m, inner) => inject.get(m) || { prev: m.onBeforeCompile, key0: m.customProgramCacheKey(), inner: !!inner };
+    const baseOf = (m, inner) => inject.get(m) || { prev: m.onBeforeCompile, key0: m.customProgramCacheKey(), inner: inner || 0 };
     function cloneInjected(mat, U) { return wrap(mat.clone(), U, baseOf(mat)); }
 
     // Wire every material on this ship to this ship's uniforms: in place when they are hers alone (our
     // Fletcher), else as her own copies (enemy types share materials between ships)
-    function rematerial(root, U, own, isInner) {
+    // Which way does this hull mesh face? Averaged over its vertices: do the normals (which follow the winding)
+    // point out of the hull's cross-section (an ellipse of its beam and depth) or into it?
+    function windingMode(geo, B, D, yc) {
+        const P = geo.attributes.position, N = geo.attributes.normal;
+        if (!N) return 2;
+        let sum = 0;
+        const step = Math.max(1, Math.floor(P.count / 4000));
+        for (let i = 0; i < P.count; i += step) {
+            const x = P.getX(i), y = P.getY(i);
+            sum += N.getX(i) * x / (B * B) + N.getY(i) * (y - yc) / (D * D);
+        }
+        return sum >= 0 ? 2 : 1;   // normals out: the back faces are the inside
+    }
+    function rematerial(root, U, own, isInner, dims) {
         const map = new Map();
         root.traverse(o => {
             if (!o.material || o.isPoints || o.isSprite) return;
             const one = m => {
                 if (!map.has(m)) {
-                    const base = baseOf(m, isInner(m));
+                    const base = baseOf(m, isInner(m) && o.geometry ? windingMode(o.geometry, dims[0], dims[1], dims[2]) : 0);
                     map.set(m, wrap(own ? m : m.clone(), U, base));
                 }
                 return map.get(m);
@@ -159,7 +173,15 @@ const Wreck = (() => {
             maxTilt: opts.maxTilt || 0.55, deckY: opts.deckY || (() => 4.5), bullets: new Map()
         };
         U.uHullDim.value.set(W.beam / 2, opts.halfDepth || 4.6, opts.midY || 0.5, 0);
-        rematerial(root, U, !!opts.ownMaterials, opts.inner || (() => false));
+        W.onHole = opts.onHole || null;
+        W.petals = [];
+        if (opts.interior) {   // frames, bulkheads and a flat inside the hull, seen through the holes
+            const g = opts.interior();
+            const im = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: 0x3a3632, roughness: 0.95, metalness: 0.2, side: THREE.DoubleSide, flatShading: true }));
+            im.name = 'interior';
+            root.add(im);
+        }
+        rematerial(root, U, !!opts.ownMaterials, opts.inner || (() => false), [W.beam / 2, opts.halfDepth || 4.6, opts.midY || 0.5]);
         root.userData.wreck = W;
         tracked.add(W);
         return W;
@@ -270,31 +292,99 @@ const Wreck = (() => {
         return true;
     }
 
-    // Push the plating in round the hit: a crater in the mesh itself
-    function dent(W, local, normal, R, depth) {
+    // Flat panels (deckhouse sides, funnels, shields) are a few big triangles that can't bend: split the ones round
+    // the hit into small ones first (only there, so the rest of the ship stays light). Each triangle near enough is
+    // cut into four until its edges are short; ones clear of the sphere are left alone, so nothing can crack open
+    // at the edge of the refined patch (outside the sphere nothing moves).
+    function refine(g, c, R, maxEdge) {
+        if (g.index) return;   // indexed meshes (the hull) are fine-grained already
+        const P = g.attributes.position.array, nTri = P.length / 9, me2 = maxEdge * maxEdge;
+        const touches = (ax, ay, az, bx, by, bz, cx, cy, cz) => {
+            const mx = (ax + bx + cx) / 3, my = (ay + by + cy) / 3, mz = (az + bz + cz) / 3;
+            const rr = Math.sqrt(Math.max((ax - mx) ** 2 + (ay - my) ** 2 + (az - mz) ** 2, (bx - mx) ** 2 + (by - my) ** 2 + (bz - mz) ** 2, (cx - mx) ** 2 + (cy - my) ** 2 + (cz - mz) ** 2));
+            return Math.hypot(mx - c.x, my - c.y, mz - c.z) < R + rr;
+        };
+        const long2 = (ax, ay, az, bx, by, bz, cx, cy, cz) => Math.max((ax - bx) ** 2 + (ay - by) ** 2 + (az - bz) ** 2, (bx - cx) ** 2 + (by - cy) ** 2 + (bz - cz) ** 2, (cx - ax) ** 2 + (cy - ay) ** 2 + (cz - az) ** 2);
+        const sel = new Uint8Array(nTri);
+        let any = 0;
+        for (let t = 0; t < nTri; t++) {
+            const o = t * 9;
+            if (long2(P[o], P[o + 1], P[o + 2], P[o + 3], P[o + 4], P[o + 5], P[o + 6], P[o + 7], P[o + 8]) <= me2) continue;
+            if (!touches(P[o], P[o + 1], P[o + 2], P[o + 3], P[o + 4], P[o + 5], P[o + 6], P[o + 7], P[o + 8])) continue;
+            sel[t] = 1; any++;
+        }
+        if (!any) return;
+        const names = Object.keys(g.attributes), sizes = names.map(n => g.attributes[n].itemSize), src = names.map(n => g.attributes[n].array);
+        const pi = names.indexOf('position');
+        const out = names.map(() => []);
+        const vtx = (t, k) => names.map((n, a) => Array.prototype.slice.call(src[a], (t * 3 + k) * sizes[a], (t * 3 + k + 1) * sizes[a]));
+        const mid = (A, B) => A.map((arr, a) => arr.map((v, i) => (v + B[a][i]) * 0.5));
+        const push = V => V.forEach((arr, a) => { for (const v of arr) out[a].push(v); });
+        const split = (A, B, C, depth) => {
+            const a = A[pi], b = B[pi], cc = C[pi];
+            if (depth >= 7 || long2(a[0], a[1], a[2], b[0], b[1], b[2], cc[0], cc[1], cc[2]) <= me2 ||
+                !touches(a[0], a[1], a[2], b[0], b[1], b[2], cc[0], cc[1], cc[2])) { push(A); push(B); push(C); return; }
+            const ab = mid(A, B), bc = mid(B, C), ca = mid(C, A);
+            split(A, ab, ca, depth + 1); split(ab, B, bc, depth + 1); split(ca, bc, C, depth + 1); split(ab, bc, ca, depth + 1);
+        };
+        for (let t = 0; t < nTri; t++) if (sel[t]) split(vtx(t, 0), vtx(t, 1), vtx(t, 2), 0);
+        const keep = nTri - any, added = out[pi].length / 3;
+        names.forEach((n, a) => {
+            const sz = sizes[a], arr = new Float32Array((keep * 3 + added) * sz);
+            let o = 0;
+            for (let t = 0; t < nTri; t++) {
+                if (sel[t]) continue;
+                arr.set(src[a].subarray(t * 3 * sz, (t + 1) * 3 * sz), o);
+                o += 3 * sz;
+            }
+            arr.set(out[a], o);
+            g.setAttribute(n, new THREE.BufferAttribute(arr, sz));
+        });
+    }
+
+    // Push the plating in round the hit: a crater in the mesh itself. Round the hole the torn edge is bent hard
+    // (in, for a shell punching through from outside; out, for a burst inside thin superstructure), the plate
+    // round it buckles and crumples.
+    const _rd = new THREE.Vector3();
+    function dent(W, local, normal, R, depth, holeR = 0, outward = false) {
         const R2 = R * R;
         const parts = W.half ? W.root.children.concat(W.half.root.children) : W.root.children;
+        const lipSign = outward ? -1 : 1;
         parts.forEach(m => {
             if (!m.isMesh || m.isInstancedMesh || !m.geometry || !m.geometry.attributes.position) return;
             if (m.position.lengthSq() > 1e-6 || m.quaternion.w < 0.99999) return;   // only parts in the ship's own frame
+            if (m.name === 'decal' || m.name === 'petals') return;
             let g = m.geometry;
             if (!g.boundingSphere) g.computeBoundingSphere();
             if (g.boundingSphere.center.distanceTo(local) > g.boundingSphere.radius + R) return;
             if (!W.own.has(g)) {
                 if (W.sharedGeo) { g = g.clone(); m.geometry = g; }
                 W.own.add(g);
-                W.orig.set(g, g.attributes.position.array.slice());
+                const keep = {};
+                Object.keys(g.attributes).forEach(n => { keep[n] = { arr: g.attributes[n].array.slice(), size: g.attributes[n].itemSize }; });
+                W.orig.set(g, keep);
             }
+            refine(g, local, R, 0.45);
             const p = g.attributes.position, a = p.array;
             let moved = false;
             for (let i = 0; i < p.count; i++) {
                 const k = i * 3, dx = a[k] - local.x, dy = a[k + 1] - local.y, dz = a[k + 2] - local.z;
                 const d2 = dx * dx + dy * dy + dz * dz;
                 if (d2 > R2) continue;
-                const f = Math.pow(1 - Math.sqrt(d2) / R, 2);
-                const crumple = (Math.sin(a[k] * 7.1 + a[k + 2] * 5.3) * Math.cos(a[k + 1] * 6.7 - a[k + 2] * 3.9)) * 0.35;
-                const s = depth * f * (1 + crumple);
-                a[k] -= normal.x * s; a[k + 1] -= normal.y * s; a[k + 2] -= normal.z * s;
+                const d = Math.sqrt(d2), f = Math.pow(1 - d / R, 2);
+                const crumple = Math.sin(a[k] * 7.1 + a[k + 2] * 5.3) * Math.cos(a[k + 1] * 6.7 - a[k + 2] * 3.9);
+                const buckle = Math.sin(d * 4.3 + a[k] * 2.1 - a[k + 2] * 1.7) * 0.5 + crumple * 0.5;
+                let s = depth * f * (1 + 0.45 * crumple);
+                // The torn lip: bent hard round the hole's edge
+                let lip = 0;
+                if (holeR > 0) lip = Math.exp(-Math.pow((d - holeR * 1.05) / (holeR * 0.45), 2)) * holeR * 0.6 * lipSign;
+                // Radial direction in the plate's plane, for edges peeling back and plates shearing
+                _rd.set(dx, dy, dz).addScaledVector(normal, -(dx * normal.x + dy * normal.y + dz * normal.z));
+                const rl = _rd.length() || 1;
+                const shear = (Math.abs(lip) * 0.35 + depth * f * 0.25 * buckle) / rl;
+                a[k] += -normal.x * (s + lip) + _rd.x * shear;
+                a[k + 1] += -normal.y * (s + lip) + _rd.y * shear;
+                a[k + 2] += -normal.z * (s + lip) + _rd.z * shear;
                 moved = true;
             }
             if (moved) {
@@ -305,6 +395,62 @@ const Wreck = (() => {
         });
     }
 
+    // Torn plate peeled back round a big hole: jagged petals of steel curling out from the rim, painted on one side,
+    // scorched and rusty on the other
+    let petalMat = null;
+    const _t1 = new THREE.Vector3(), _t2 = new THREE.Vector3(), _pc = new THREE.Vector3();
+    function petals(W, root, local, normal, r, outward) {
+        if (!petalMat) petalMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, metalness: 0.35, side: THREE.DoubleSide, flatShading: true });
+        _t1.set(Math.abs(normal.y) < 0.9 ? 0 : 1, Math.abs(normal.y) < 0.9 ? 1 : 0, 0).cross(normal).normalize();
+        _t2.crossVectors(normal, _t1);
+        const pos = [], col = [];
+        const P = (rad, ang, up) => _pc.copy(local).addScaledVector(_t1, Math.cos(ang) * rad).addScaledVector(_t2, Math.sin(ang) * rad).addScaledVector(normal, up).toArray();
+        const tri = (A, B, C, ca, cb, cc) => { pos.push(...A, ...B, ...C); col.push(...ca, ...cb, ...cc); };
+        // Each petal is a strip of plate in three segments, curling more the further it reaches (in through a shell
+        // hole, out of a burst), twisting as it goes, narrowing to a ragged tip
+        const n = 6 + Math.floor(Math.random() * 7), side = outward ? 1 : -1;
+        const paint = [0.42, 0.44, 0.46], soot = [0.07, 0.065, 0.06], rust = [0.33, 0.2, 0.14], bare = [0.55, 0.55, 0.54];
+        const rad = new THREE.Vector3(), tan = new THREE.Vector3(), dir = new THREE.Vector3(), q = new THREE.Quaternion();
+        for (let i = 0; i < n; i++) {
+            const am = (i + rnd(0.2, 0.8)) / n * Math.PI * 2, halfW = r * Math.PI / n * rnd(0.35, 0.6);
+            const L = r * rnd(0.45, 1.3), bend = rnd(0.6, 2.2), twist = randn() * 0.5, S = 3;
+            rad.copy(_t1).multiplyScalar(Math.cos(am)).addScaledVector(_t2, Math.sin(am));
+            tan.crossVectors(normal, rad);
+            let c = _pc.copy(local).addScaledVector(rad, r * rnd(0.82, 0.98));
+            let prevL = null, prevR = null;
+            const tint = Math.random() < 0.6 ? paint : rust;
+            for (let k = 0; k <= S; k++) {
+                const f = k / S, wf = halfW * (1 - 0.85 * f) * rnd(0.8, 1.2);
+                q.setFromAxisAngle(rad, twist * f);
+                const tw = _w.copy(tan).applyQuaternion(q);
+                const Lp = c.clone().addScaledVector(tw, wf), Rp = c.clone().addScaledVector(tw, -wf);
+                const ck = f < 0.34 ? soot : f < 0.7 ? tint : (Math.random() < 0.5 ? rust : bare);
+                if (prevL) {
+                    tri(prevL.toArray(), prevR.toArray(), Rp.toArray(), prevL.col, prevL.col, ck);
+                    tri(prevL.toArray(), Rp.toArray(), Lp.toArray(), prevL.col, ck, ck);
+                }
+                Lp.col = Rp.col = ck;
+                prevL = Lp; prevR = Rp;
+                // Next segment: back across the hole and curling out of the plate
+                const phi = bend * (f + 1 / S) * 0.75;
+                dir.copy(rad).multiplyScalar(-Math.cos(phi)).addScaledVector(normal, side * Math.sin(phi)).addScaledVector(tan, randn() * 0.15).normalize();
+                c = c.clone().addScaledVector(dir, L / S);
+            }
+            // Ragged tip
+            tri(prevL.toArray(), prevR.toArray(), c.clone().addScaledVector(dir, L * rnd(0.05, 0.25)).toArray(), prevL.col, prevL.col, rust);
+        }
+        const g = new THREE.BufferGeometry();
+        g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+        g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+        g.computeVertexNormals();
+        const mesh = new THREE.Mesh(g, petalMat);
+        mesh.name = 'petals';
+        mesh.castShadow = true;
+        root.add(mesh);
+        W.petals.push(mesh);
+        if (W.petals.length > 40) { const old = W.petals.shift(); if (old.parent) old.parent.remove(old); old.geometry.dispose(); }
+    }
+
     // A hit at `local` (on the hull surface, ship frame) with outward `normal`; power 1 = 5" shell, ~4 = torpedo
     function hit(root, local, normal, power = 1) {
         const W = root.userData.wreck;
@@ -313,11 +459,15 @@ const Wreck = (() => {
         // Thin superstructure plating (deckhouses, funnels, bridge, shields) loses whole chunks; the hull's
         // thicker side plating is holed and pushed in round the hole
         const upper = local.y > W.deckY(local.z) + 0.4;
-        const r = (power >= 3 ? 1.3 : upper ? rnd(0.9, 1.5) : rnd(0.5, 0.8)) * k;
+        // Torpedoes and bombs tear holes metres across (k = 2 for a torpedo: ~3.5-4.5 m)
+        const r = (power >= 3 ? rnd(1.7, 2.3) : upper ? rnd(0.9, 1.5) : rnd(0.5, 0.8)) * k;
+        const outward = upper && Math.random() < 0.55;   // a burst inside thin plating blows the edges out
         addHole(W, _v.copy(local).addScaledVector(normal, upper ? -0.35 * r : -0.1 * r), r);
+        if (W.onHole) W.onHole(local, r);
         if (upper && Math.random() < 0.6) addHole(W, _v.copy(local).addScaledVector(normal, -r * 1.1).add(_w.set(randn(), randn() * 0.6, randn()).multiplyScalar(0.5 * r)), r * rnd(0.6, 0.9));
         if (power >= 2 && Math.random() < 0.7) addHole(W, _v.copy(local).addScaledVector(normal, -0.6).add(_w.set(randn(), randn() * 0.5, randn()).multiplyScalar(0.8 * k)), 0.7 * k);
-        dent(W, local, normal, 2.0 + 1.6 * k, (upper ? 0.45 : 0.3) * power);
+        dent(W, local, normal, 2.2 + 1.8 * k, (upper ? 0.5 : 0.32) * power, r, outward);
+        petals(W, W.broken && local.z < W.cutZ ? W.half.root : W.root, local, normal, r, outward);
         // The keel girder: hits low and amidships do the most harm to her back
         const mid = 1 - Math.min(1, Math.abs(local.z) / (W.len * 0.45));
         const low = local.y < 1.5 ? 1 : 0.35;
@@ -418,7 +568,12 @@ const Wreck = (() => {
         W.bullets.forEach((b, r) => { b.n = 0; b.mesh.count = 0; });
         W.U.uCut.value.set(0, 0);
         W.U.uBend.value.set(0, 0, 0, 4);
-        W.orig.forEach((arr, g) => { g.attributes.position.array.set(arr); g.attributes.position.needsUpdate = true; g.computeVertexNormals(); g.computeBoundingSphere(); });
+        W.orig.forEach((keep, g) => {
+            Object.keys(keep).forEach(n => g.setAttribute(n, new THREE.BufferAttribute(keep[n].arr.slice(), keep[n].size)));
+            g.computeBoundingSphere();
+        });
+        W.petals.forEach(m => { if (m.parent) m.parent.remove(m); m.geometry.dispose(); });
+        W.petals.length = 0;
         tracked.add(W);
     }
 

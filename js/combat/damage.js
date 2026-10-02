@@ -85,6 +85,34 @@ function onEnemyShellMiss(p) {
     }
 }
 
+// A hole torn through one of our fittings (wreck.js) wrecks it for good: a 5" mount, a light AA mount, a torpedo
+// mount or the Mk 37 director stops dead where it is. Damage control can't fix those at sea.
+function wreckFittings(local, r) {
+    const hit = (obj, reach) => obj.position.distanceTo(local) < r + reach;
+    guns.forEach(g => {
+        if (g.wrecked || !hit(g.mount, 2.4)) return;
+        g.wrecked = g.disabled = true;
+        hudMessage(`${g.name} wrecked — a shell tore through the mount!`, 'alert');
+    });
+    AA.mounts.forEach(m => {
+        if (m.wrecked || !hit(m.obj, m.kind === 40 ? 1.8 : 1.1)) return;
+        m.wrecked = true;
+        m.disabled = Infinity;
+        hudMessage(`${m.name} ${m.gun.name} wrecked`, 'alert');
+    });
+    torpMounts.forEach(m => {
+        if (m.disabled || !hit(m.obj, 2.6)) return;
+        m.disabled = true;
+        m.pending = null;
+        hudMessage(`${m.name} wrecked${m.left ? ` with ${m.left} fish aboard` : ''}`, 'alert');
+    });
+    const mk37 = myShip.userData.mk37;
+    if (mk37 && !mk37.userData.wrecked && hit(mk37, 1.5)) {
+        mk37.userData.wrecked = true;
+        hudMessage('Mk 37 director wrecked — the mounts go to local control', 'alert');
+    }
+}
+
 // Her back is broken: she goes in two and down
 function breakPlayer() {
     const W = Wreck.get(myShip);

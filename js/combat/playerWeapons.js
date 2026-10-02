@@ -17,11 +17,12 @@ function initPlayerWeapons() {
 
 function resetPlayerWeapons() {
     guns.forEach(g => {
-        Object.assign(g, { train: g.stowYaw, elev: 0, reload: 0, recoil: 0, status: 'stowed', onTarget: false, disabled: false });
+        Object.assign(g, { train: g.stowYaw, elev: 0, reload: 0, recoil: 0, status: 'stowed', onTarget: false, disabled: false, wrecked: false });
         g.mount.rotation.y = g.stowYaw;
         g.pivot.rotation.x = 0;
     });
     torpMounts.forEach(m => { Object.assign(m, { left: 5, train: 0, disabled: false, pending: null }); m.obj.rotation.y = 0; });
+    if (myShip.userData.mk37) { myShip.userData.mk37.userData.wrecked = false; myShip.userData.mk37.rotation.y = 0; }
 }
 
 const _mp = new THREE.Vector3(), _qi = new THREE.Quaternion(), _pv = new THREE.Vector3();
@@ -32,7 +33,7 @@ function updatePlayerGuns(dt) {
         g.reload = Math.max(0, g.reload - dt);
         g.recoil = Math.max(0, g.recoil - dt * 1.7);
         let tTrain = g.stowYaw, tElev = 0, canFire = false;
-        g.status = g.disabled ? 'damaged' : 'stowed';
+        g.status = g.wrecked ? 'wrecked' : g.disabled ? 'damaged' : 'stowed';
         if (aim && !g.disabled) {
             g.mount.getWorldPosition(_mp);
             g.pivot.getWorldPosition(_pv);
@@ -54,7 +55,12 @@ function updatePlayerGuns(dt) {
                 canFire = !!sol;
             }
         }
-        if (g.disabled) { tTrain = g.train; tElev = g.elev; }
+        if (g.disabled) { tTrain = g.train; tElev = g.wrecked ? -6 * DEG : g.elev; }   // wrecked: barrels sag
+        if (g.wrecked && Math.random() < dt * 2) {
+            g.mount.getWorldPosition(_mp);
+            smokeFx.emit({ x: _mp.x + randn(), y: _mp.y + 2, z: _mp.z + randn(), vx: Sea.wind.x, vy: 1.5, vz: Sea.wind.y,
+                life: rnd(4, 8), s0: 1.5, s1: rnd(8, 14), r: 0.14, g: 0.13, b: 0.13, a: 0.45, drag: 0.4, grav: -0.3 });
+        }
         const dT = wrapAngle(tTrain - g.train);
         const step = Math.max(-TRAIN_RATE * dt, Math.min(TRAIN_RATE * dt, dT));
         g.train = wrapAngle(g.train + step);
@@ -81,7 +87,7 @@ function updatePlayerGuns(dt) {
             const l = myShip.worldToLocal(aim.clone());
             tYaw = Math.atan2(l.x, l.z - mk37.position.z);
         }
-        mk37.rotation.y += Math.max(-0.8 * dt, Math.min(0.8 * dt, wrapAngle(tYaw - mk37.rotation.y)));
+        if (!mk37.userData.wrecked) mk37.rotation.y += Math.max(-0.8 * dt, Math.min(0.8 * dt, wrapAngle(tYaw - mk37.rotation.y)));
     }
 
     if (Game.running && (director.trigger || director.aiTrigger)) guns.forEach(g => { if (g.onTarget && g.reload <= 0) fireGun(g); });
