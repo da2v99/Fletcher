@@ -57,7 +57,9 @@ const Clouds = (() => {
             float dawn0 = 1.0 - smoothstep(0.05, 0.45, uSunDir.y);
             float bright0 = mix(0.45, 1.0, smoothstep(-0.1, 0.3, uSunDir.y)) * (1.0 - 0.85 * nightF());
             vec3 cc = mix(vec3(1.0, 0.98, 0.95), uSunCol * vec3(1.0, 0.86, 0.8), dawn0 * 0.7) * bright0 * (1.0 - 0.45 * uStorm);
-            cc = mix(cc, mix(vec3(0.24, 0.29, 0.38), vec3(0.10, 0.11, 0.13), uStorm) * bright0, smoothstep(0.7, 1.0, n));
+            float gold0 = goldenF() * (1.0 - uStorm * 0.6);
+            cc = mix(cc, vec3(1.0, 0.55, 0.32) * bright0 * 1.2, gold0 * 0.7);
+            cc = mix(cc, mix(mix(vec3(0.24, 0.29, 0.38), vec3(0.34, 0.27, 0.44), gold0), vec3(0.10, 0.11, 0.13), uStorm) * bright0, smoothstep(0.7, 1.0, n));
             float haze0 = (1.0 - smoothstep(0.0, 0.3, rd.y)) * 0.65 + (1.0 - smoothstep(0.0, 0.05, rd.y)) * 0.35;
             cc = mix(cc, sky, haze0);
             gl_FragColor = vec4(mix(sky, cc, cov * 0.9), cov);
@@ -69,7 +71,10 @@ const Clouds = (() => {
             vec3 sunL = normalize(vec3(uSunDir.x, max(uSunDir.y, 0.05), uSunDir.z));
             vec3 litCol = mix(vec3(1.0, 0.99, 0.97), uSunCol * vec3(1.0, 0.86, 0.8), dawn * 0.7) * bright * (1.0 - 0.45 * uStorm);
             litCol += uSunCol * pow(sd, 6.0) * 0.4 * (1.0 - uStorm * 0.6);   // silver lining toward the sun
-            vec3 shadowCol = mix(vec3(0.24, 0.29, 0.38), vec3(0.10, 0.11, 0.13), uStorm) * bright;
+            // Sunrise and sunset: tops lit orange and gold, undersides violet-grey
+            float gold = goldenF() * (1.0 - uStorm * 0.6);
+            litCol = mix(litCol, vec3(1.0, 0.56, 0.30) * bright * 1.25 + uSunCol * pow(sd, 3.0) * 0.5, gold * 0.75);
+            vec3 shadowCol = mix(mix(vec3(0.24, 0.29, 0.38), vec3(0.36, 0.27, 0.45), gold * 0.8), vec3(0.10, 0.11, 0.13), uStorm) * bright;
 
             vec3 ro = vec3(0.0, -1.0, 0.0);
             vec4 rez = vec4(0.0);

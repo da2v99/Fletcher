@@ -373,6 +373,7 @@ function createOcean(skyCube, q = Settings.gfx.ocean) {
     const mat = new THREE.ShaderMaterial(Object.assign({ uniforms, extensions: { derivatives: true } }, oceanShaders(q)));
     const mesh = new THREE.Mesh(createOceanGeometry(q), mat);
     mesh.frustumCulled = false;
+    mesh.renderOrder = 2;   // after the boats' water masks (person.js), so no sea shows inside an open boat
     mesh.userData.quality = q;
     return mesh;
 }

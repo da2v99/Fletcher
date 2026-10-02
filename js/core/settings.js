@@ -64,6 +64,7 @@ const Settings = {
             Object.assign(this.ctl, s.ctl || {});
             Object.assign(this.audio, s.audio || {});
             this.sea = s.sea || null;
+            this.seaV = s.seaV || 1;
             this.weather = s.weather || null;
         }
         if (this.gfx.preset === 'auto' || !GFX_PRESETS[this.gfx.preset]) this.applyPreset('auto');
@@ -84,6 +85,7 @@ const Settings = {
                 localStorage.setItem(SETTINGS_KEY, JSON.stringify({
                     gfx: this.gfx, ctl: this.ctl, audio: this.audio,
                     sea: typeof SeaParams !== 'undefined' ? SeaParams : this.sea,
+                    seaV: typeof SEA_VERSION !== 'undefined' ? SEA_VERSION : this.seaV,
                     weather: typeof weather !== 'undefined' ? { hour: weather.hour, storm: weather.storm } : this.weather
                 }));
             } catch (e) { /* private mode or storage full: settings just won't persist */ }

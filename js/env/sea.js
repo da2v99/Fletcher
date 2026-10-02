@@ -14,21 +14,24 @@ const GOLDEN_RATIO = 1.61803398875, GOLDEN_ANGLE = 2.39996323;
 
 const SEA_DEFAULTS = {
     // World mapping
-    hs: 1.7,               // significant wave height, metres
+    hs: 2.4,               // significant wave height, metres
     autoScale: false,      // tie the wavelength scale to the wave height
-    scale: 0.02,           // metres per example unit when autoScale is off (14 m peak wavelength)
+    scale: 27 / 760,       // metres per example unit when autoScale is off (27 m peak wavelength)
     // Example: Gerstner set
-    spread: 0.155, steepness: 2.0, medAmplitude: 10.5, medWavelength: 700, speed: 5.0, windDir: 34,
+    spread: 0.05, steepness: 2.0, medAmplitude: 11.5, medWavelength: 760, speed: 5.0, windDir: 34,
     // Example: detail layer
     sharp: 0.0, chop: 0.0, ripple: 0.0, asym: 1.0,
     // Example: macro swell
-    macroOn: true, macroHeight: 100, macroSize: 0.07,
+    macroOn: true, macroHeight: 260, macroSize: 0.28,
     // Ship mass slider: 0 = a football, 0.5 = the real Fletcher, 1 = two Nimitz-class carriers (shipPhysics.js)
     massPos: 0.5,
     // Example: colouring
     foam: 0.52, colorSpan: 0.45, depthBias: 1.4, deep: '#001e41', peak: '#0082ff'
 };
-const SeaParams = Object.assign({}, SEA_DEFAULTS, Settings.sea || {});   // the player's tuned sea, if saved
+// The player's tuned sea, if saved. A sea saved before the current defaults (SEA_VERSION) starts again from
+// them, keeping only the ship's mass.
+const SEA_VERSION = 2;
+const SeaParams = Object.assign({}, SEA_DEFAULTS, Settings.seaV >= SEA_VERSION ? Settings.sea || {} : { massPos: Settings.sea ? Settings.sea.massPos ?? 0.5 : 0.5 });
 
 const Sea = {
     hs: 0, S: 0.2, V: 0.03, T: 0.4, macroT: 1, maxAmp: 0, detailMean: 0,

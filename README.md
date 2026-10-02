@@ -42,7 +42,8 @@ freezes the battle; the waves and ship keep moving so you can see each change li
 wave height (Hs, metres), wavelength scale (auto or manual), speed, wind direction; the example's Gerstner set
 (spread, steepness, swell vs detail, med wavelength); detail (sharpness, chop, ripple, asymmetry); macro swell
 (on/off, height, size); colour (deep and peak colours, foam threshold, colour span, depth bias). "Reset waves"
-restores the defaults (1.7 m sea, 14 m peak wavelength, glassy blue swell) while keeping the current wave height. Moving the Weather slider also sets the wave height.
+restores the defaults (2.4 m sea, 27 m peak wavelength, spread 0.050, swell vs detail 11.5, med wavelength 760, macro
+swell 260 at size 0.28) while keeping the current wave height. Moving the Weather slider also sets the wave height.
 **Ship mass** (Ship motion section) runs from a football (0.43 kg) through the real Fletcher (2,900 t, the
 middle of the slider) to two Nimitz-class carriers (200,000 t). The ship then moves in the waves like a
 geometrically similar hull of that mass would (see Ship motion below); steering and speed stay the Fletcher's.
@@ -140,6 +141,11 @@ drive (a hum and a motor whine that climbs with the slewing speed, gear grind, h
 drive, the Oerlikons' creak, and a clunk as each takes up or comes to rest.
 
 ## Sky
+Sunrise and sunset have their own palette: the low sky burns orange toward the sun, through salmon and rose to
+lavender away from it, under a band of rose and violet and a deep indigo zenith; as the sun goes down the earth's
+blue-grey shadow rises opposite it with the pink Belt of Venus above. The sun reddens near the horizon, the light
+turns golden then deep orange, and the clouds light orange on top with violet-grey undersides. The ships' fog
+follows the same colours.
 Stars are individual points (about 14,000, with a Milky Way band and its dark rift) drawn at screen resolution,
 fading in after sunset, twinkling low down and hidden by cloud; the time slider now runs into full night
 (04:24-19:36). The cloud cube is sharper and its texels are filtered away.

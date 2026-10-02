@@ -442,21 +442,148 @@ const IJN = (() => {
     }
 
     // Daihatsu Type 14 m landing barge: open well with a bow ramp, a small armoured coxswain's position aft
+    // Daihatsu-class 14 m landing craft (大発動艇), after the reference model: twin bow keels ("shark fins"),
+    // ribbed sides with a little tumblehome, a raked bow ramp, the coxswain's open semi-cylindrical armoured
+    // shield with its window slot, wheel and console, twin exhausts, the peaked engine cover, a rounded stern
+    // with skeg and screw. Built in the model's own frame (x forward, metres of the reference) and then turned,
+    // scaled to the real boat's 14.9 m and floated at its laden waterline.
     function daihatsu() {
-        const m = mats();
+        const std = (color, o = {}) => new THREE.MeshStandardMaterial(Object.assign({ color, roughness: 0.8, metalness: 0.15, flatShading: true, side: THREE.DoubleSide }, o));
+        const grey = std(0x484e53), red = std(0x5a201b, { roughness: 0.9 }), wood = std(0x5a4430, { roughness: 0.9 }),
+            dark = std(0x18191b, { roughness: 0.7 }), brass = std(0x756545, { roughness: 0.4, metalness: 0.6 });
+        const lampR = new THREE.MeshBasicMaterial({ color: 0xff2a1a }), lampG = new THREE.MeshBasicMaterial({ color: 0x22ff44 });
+        const m = new THREE.Group();
+        const mesh = (geo, mat, parent = m) => { const o = new THREE.Mesh(geo, mat); o.castShadow = true; o.receiveShadow = true; parent.add(o); return o; };
+        const boxGeo = (x0, x1, y0, y1, z0, z1, sx = 1, sy = 1, sz = 1) => {
+            const g = new THREE.BoxGeometry(x1 - x0, y1 - y0, z1 - z0, sx, sy, sz);
+            g.translate((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
+            return g;
+        };
+        // The hull's lines, applied to every hull part: elliptical rounded stern, bow taper, tumblehome, sheer
+        // rising to bow and stern, the belly rising toward both ends, raked bow and stern
+        const deform = (x, y, z) => {
+            let nx = x, ny = y;
+            const zs = Math.sign(z) || 1, az0 = Math.abs(z);
+            let az = az0;
+            if (x < -4.2) {
+                const u = (x + 4.2) / -5.4, v = Math.min(az0 / 2.5, 1);
+                const up = u * Math.sqrt(1 - v * v / 2), vp = v * Math.sqrt(1 - u * u / 2);
+                nx = -4.2 - 5.4 * up;
+                az = az0 * (v === 0 ? Math.sqrt(1 - u * u / 2) : vp / v);
+            }
+            if (x > 7.2) az *= 1 - (x - 7.2) / 2.2 * 0.05;
+            if (y > 1.0) az -= (y - 1.0) * 0.08;
+            if (y > -0.1) { if (x < -2.4) ny += Math.pow(Math.abs(x + 2.4), 1.5) * 0.04; if (x > 4.8) ny += Math.pow(x - 4.8, 1.6) * 0.08; }
+            if (y <= 0.2) { if (x < -2.4) ny += Math.pow(Math.abs(x + 2.4), 1.5) * 0.025; if (x > 4.8) ny += Math.pow(x - 4.8, 1.8) * 0.06; }
+            if (x > 6.0) nx += (y + 0.8) * 0.85 * (x - 6.0) / 3.4;
+            if (x < -6.0) nx -= (y + 0.8) * 0.3 * (-6.0 - x) / 3.6;
+            return [nx, ny, az * zs];
+        };
+        const shaped = g => {
+            const p = g.attributes.position;
+            for (let i = 0; i < p.count; i++) { const v = deform(p.getX(i), p.getY(i), p.getZ(i)); p.setXYZ(i, v[0], v[1], v[2]); }
+            g.computeVertexNormals();
+            return g;
+        };
+        // Hull shell
+        mesh(shaped(boxGeo(-9.6, 9.4, -0.2, 2.0, 2.3, 2.5, 10, 4, 1)), grey);
+        mesh(shaped(boxGeo(-9.6, 9.4, -0.2, 2.0, -2.5, -2.3, 10, 4, 1)), grey);
+        mesh(shaped(boxGeo(-9.6, -9.4, -0.2, 2.0, -2.5, 2.5, 2, 4, 6)), grey);
+        mesh(shaped(boxGeo(-9.6, 9.4, -0.8, -0.2, -2.45, 2.45, 10, 2, 6)), red);
+        mesh(shaped(boxGeo(-3.6, 9.4, -0.2, -0.1, -2.3, 2.3, 5, 1, 4)), wood);
+        mesh(shaped(boxGeo(-9.6, -3.6, 0.8, 0.9, -2.3, 2.3, 8, 1, 6)), grey);
+        mesh(shaped(boxGeo(-3.8, -3.6, -0.2, 0.8, -2.3, 2.3, 2, 4, 4)), grey);
+        // Twin bow keels
+        const keel = (z0, z1) => {
+            const g = boxGeo(4.8, 9.4, -1.4, -0.6, z0, z1, 10, 4, 1), p = g.attributes.position;
+            for (let i = 0; i < p.count; i++) {
+                const x = p.getX(i);
+                let y = p.getY(i), z = p.getZ(i);
+                const bottom = x > 5.4 && x < 9.4 ? -0.6 - Math.sin((x - 5.4) / 4.0 * Math.PI) * 0.75 : -0.6;
+                if (y < -0.6) y = -0.6 - (-0.6 - y) / 0.8 * (-0.6 - bottom);
+                const depth = Math.max(0, (-0.6 - y) / 0.75), mid = (z0 + z1) / 2;
+                z = mid + (z - mid) * (1 - depth * 0.8);
+                p.setXYZ(i, x, y, z);
+            }
+            return shaped(g);
+        };
+        mesh(keel(0.8, 1.4), grey);
+        mesh(keel(-1.4, -0.8), grey);
+        // Side ribs
+        [6.6, 4.2, 1.8, -0.6, -3.0].forEach(x => {
+            mesh(shaped(boxGeo(x - 0.08, x + 0.08, -0.2, 1.8, 2.5, 2.6, 1, 4, 1)), grey);
+            mesh(shaped(boxGeo(x - 0.08, x + 0.08, -0.2, 1.8, -2.6, -2.5, 1, 4, 1)), grey);
+        });
+        // Bow winch
+        const winch = new THREE.Group(); winch.position.set(4.8, -0.1, 0); m.add(winch);
+        mesh(new THREE.BoxGeometry(0.8, 0.2, 0.8), grey, winch);
+        const drum = mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.6, 16), dark, winch); drum.rotation.x = Math.PI / 2; drum.position.y = 0.3;
+        [0.35, -0.35].forEach(z => mesh(new THREE.BoxGeometry(0.1, 0.4, 0.1), grey, winch).position.set(0, 0.2, z));
+        // Coxswain's shield: an open semi-cylinder with a window slot, nav lamps on top, console and wheel inside
+        const shield = new THREE.Group(); shield.position.set(-5.4, 0.9 + Math.pow(3, 1.5) * 0.04, 0); m.add(shield);
+        const arc = new THREE.Shape();
+        arc.absarc(0, 0, 1.1, 0, Math.PI, false);
+        arc.absarc(0, 0, 0.95, Math.PI, 0, true);
+        const shell = depth => { const g = new THREE.ExtrudeGeometry(arc, { depth, bevelEnabled: false, curveSegments: 8 }); g.rotateX(-Math.PI / 2); g.rotateY(-Math.PI / 2); return g; };
+        mesh(shell(2.76), grey, shield);
+        mesh(shell(0.92), grey, shield).position.y = 3.22;
+        for (let i = 0; i <= 3; i++) {
+            const a = -Math.PI / 2 + i / 3 * Math.PI, pr = 1.025;
+            const pillar = mesh(new THREE.BoxGeometry(0.15, 0.46, 0.15), grey, shield);
+            pillar.position.set(Math.cos(a) * pr, 2.99, Math.sin(a) * pr);
+            pillar.rotation.y = -a;
+        }
+        const lamps = new THREE.Group(); lamps.position.set(1.15, 4.29, 0); shield.add(lamps);
+        mesh(new THREE.BoxGeometry(0.1, 0.3, 0.2), dark, lamps);
+        mesh(new THREE.BoxGeometry(0.12, 0.25, 0.1), lampR, lamps).position.set(0, 0, 0.1);
+        mesh(new THREE.BoxGeometry(0.12, 0.25, 0.1), lampG, lamps).position.set(0, 0, -0.1);
+        mesh(new THREE.BoxGeometry(0.5, 1.82, 0.7), wood, shield).position.set(0.3, 0.91, 0);
+        const wheel = mesh(new THREE.TorusGeometry(0.38, 0.03, 8, 24), wood, shield);
+        wheel.position.set(0, 1.89, 0); wheel.rotation.set(Math.PI / 6, Math.PI / 2, 0);
+        for (let i = 0; i < 4; i++) mesh(new THREE.CylinderGeometry(0.015, 0.015, 1.02, 5), wood, wheel).rotation.z = Math.PI / 4 * i;
+        const hub = mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.1, 12), brass, wheel); hub.rotation.x = Math.PI / 2;
+        // Exhausts and the peaked engine cover
+        const exY = 0.9 + Math.pow(4.2, 1.5) * 0.04, tips = [];
+        [0.5, -0.5].forEach(z => {
+            const ex = new THREE.Group(); ex.position.set(-6.6, exY, z); m.add(ex);
+            mesh(new THREE.CylinderGeometry(0.12, 0.15, 2.0, 8), grey, ex).position.y = 1.0;
+            const tip = mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.5, 8), dark, ex);
+            tip.position.set(-0.15, 2.1, 0); tip.rotation.z = Math.PI / 4;
+            tips.push(tip);
+        });
+        const cover = new THREE.Group(); cover.position.set(-8.4, 0.9 + Math.pow(6, 1.5) * 0.04, 0); m.add(cover);
+        mesh(new THREE.BoxGeometry(0.8, 0.8, 1.2), grey, cover).position.y = 0.4;
+        [[0.3, Math.PI / 6], [-0.3, -Math.PI / 6]].forEach(([z, r]) => { const o = mesh(new THREE.BoxGeometry(0.8, 0.08, 0.7), grey, cover); o.position.set(0, 0.95, z); o.rotation.x = r; });
+        // Skeg and screw
+        const skeg = new THREE.Group(); skeg.position.set(-9.4, -0.45, 0); m.add(skeg);
+        mesh(new THREE.BoxGeometry(1.6, 0.8, 0.1), red, skeg);
+        const shaft = mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.5, 6), brass, skeg); shaft.rotation.z = Math.PI / 2; shaft.position.set(0.1, -0.2, 0);
+        const screw = new THREE.Group(); screw.position.set(-0.6, -0.2, 0); skeg.add(screw);
+        mesh(new THREE.CylinderGeometry(0.06, 0.08, 0.2, 8), brass, screw).rotation.z = Math.PI / 2;
+        for (let i = 0; i < 3; i++) { const b = mesh(new THREE.BoxGeometry(0.05, 0.5, 0.15), brass, screw); b.rotation.x = i * Math.PI * 2 / 3; b.rotation.y = 0.5; b.translateY(0.18); }
+        // Bow ramp, raised
+        const ramp = new THREE.Group();
+        ramp.position.set(9.4 + 0.6 * 0.85, -0.2 + Math.pow(4.6, 1.6) * 0.08, 0);
+        ramp.rotation.z = Math.PI / 2 - Math.atan(0.85);
+        m.add(ramp);
+        const RL = 3.2, RT = 0.15, HW = 2.2;
+        [1, -1].forEach(sd => {
+            const half = new THREE.Group(); half.position.set(RL / 2, RT / 2, sd * HW / 2); ramp.add(half);
+            mesh(new THREE.BoxGeometry(RL, RT, HW - 0.02), grey, half);
+            mesh(new THREE.BoxGeometry(RL - 0.1, 0.05, HW - 0.1), wood, half).position.y = RT / 2 + 0.025;
+        });
+        for (let rx = 0.4; rx < RL; rx += 0.6) mesh(new THREE.BoxGeometry(0.1, RT + 0.05, 2.5), dark, ramp).position.set(rx, RT / 2, 0);
+
+        // Into the game's frame: bow along +Z, 14.9 m long, laden waterline at y = 0 (the reference's y = -0.35)
+        const K = 14.9 / 19.0;
+        m.rotation.y = -Math.PI / 2;
+        m.scale.setScalar(K);
+        m.position.y = 0.35 * K;
         const g = new THREE.Group();
-        const L = 14.9, B = 3.3;
-        const hull = add(g, prism([[-B / 2, -L / 2], [B / 2, -L / 2], [B / 2, L / 2 - 2.2], [B / 2 - 0.5, L / 2], [-B / 2 + 0.5, L / 2], [-B / 2, L / 2 - 2.2]], -0.8, 1.2), m.grayDark);
-        hull.receiveShadow = true;
-        add(g, Box(B - 0.5, 0.1, L - 4.5), m.wood, 0, 0.2, -0.6);                   // well deck
-        const ramp = add(g, Box(B - 1.0, 1.7, 0.18), m.gray, 0, 1.0, L / 2 - 0.3);   // bow ramp, raised
-        ramp.rotation.x = -0.12;
-        add(g, Box(1.8, 1.3, 1.6), m.gray, 0, 1.85, -L / 2 + 1.6);                  // coxswain's shelter
-        add(g, Box(1.6, 0.25, 0.1), m.glass, 0, 2.2, -L / 2 + 2.42);
-        add(g, Cyl(0.12, 0.12, 1.1, 6), m.black, 0.6, 2.3, -L / 2 + 0.6);           // diesel exhaust
-        // A few troops and supply crates in the well
-        for (let i = 0; i < 5; i++) add(g, Box(0.9, 0.7, 1.1), m.wood, (i % 2 ? 0.6 : -0.6), 0.6, 3 - i * 1.6);
-        return { group: g, turrets: [], torpLaunchers: [], stacks: [new THREE.Vector3(0.6, 3, -L / 2 + 0.6)], len: L, beam: B, top: 3 };
+        g.add(m);
+        g.updateMatrixWorld(true);
+        const stacks = tips.map(t => t.getWorldPosition(new THREE.Vector3()));
+        return { group: g, turrets: [], torpLaunchers: [], stacks, len: 14.9, beam: 5.0 * K, top: 4.3 * K + 1 };
     }
 
     return { destroyer, maru, cruiser, daihatsu };
