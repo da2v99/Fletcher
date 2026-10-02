@@ -548,8 +548,9 @@ const Wreck = (() => {
         FX.explosion(p, 2.4);
         FX.fuelBlast(p, 0.6);
         playBoom(p, 2, 260, 4.5);
-        Debris.burst(p, 46, 1.2, { speed: 1.3, smoky: 0.6, burning: 0.5 });
-        Debris.burst(p, 24, 0.9, { speed: 0.6, kind: 4 });
+        Debris.burst(p, 46, 1.6, { speed: 1.3, smoky: 0.6, burning: 0.5, mix: 'blast', crew: 2.5, side: root === myShip ? 'us' : 'ijn' });
+        Debris.burst(p, 24, 0.9, { speed: 0.6, mix: 'wood' });
+        if (typeof Slicks !== 'undefined') Slicks.spill(p.x, p.z, rnd(50, 80), { burn: rnd(25, 50), grow: 2.4 });
         if (typeof cameraShake === 'function' && root === myShip) cameraShake(2.5);
     }
 

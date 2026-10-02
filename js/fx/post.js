@@ -231,8 +231,12 @@ const Gfx = (() => {
         if (wasOn !== renderer.shadowMap.enabled) scene.traverse(o => { if (o.material) [].concat(o.material).forEach(m => { m.needsUpdate = true; }); });
         // Sky, sea, particles
         Clouds.setQuality(g.clouds);
-        if (ocean && ocean.userData.quality !== g.ocean) rebuildOcean(g.ocean);
-        if (typeof Islands !== 'undefined') Islands.setQuality(g.terrain ?? 1);
+        if (ocean && (ocean.userData.quality !== g.ocean || ocean.userData.radius !== oceanRadius())) rebuildOcean(g.ocean);
+        // View distance: haze, the far plane and how far out islands are built
+        if (typeof weather !== 'undefined' && !(typeof Underwater !== 'undefined' && Underwater.under)) WEATHER_U.uFogDensity.value = scene.fog.density = fogDensityFor(weather.storm);
+        const far = Math.max(70000, oceanRadius() * 1.6);
+        if (camera.far !== far) { camera.far = far; camera.updateProjectionMatrix(); }
+        if (typeof Islands !== 'undefined') { Islands.setQuality(g.terrain ?? 1); Islands.setViewDist(g.viewDist || 1); }
         // Post-processing on/off, MSAA change needs new targets
         const wantPost = !!g.post;
         if (post && (!wantPost || (post.scene.isWebGLMultisampleRenderTarget ? 'msaa' : 'x') !== (g.aa === 'msaa' ? 'msaa' : 'x'))) disposePost();

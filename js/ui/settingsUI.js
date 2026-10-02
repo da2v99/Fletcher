@@ -95,6 +95,8 @@ const GFX_ITEMS = [
       hint: 'Ships, islands, fires and explosions mirrored in the waves. Draws the world twice.' },
     { label: 'Islands', type: 'select', numeric: true, options: [[0, 'Low (phones)'], [1, 'Medium'], [2, 'High (dense jungle)']],
       get: () => Settings.gfx.terrain, set: gfxSet('terrain') },
+    { label: 'View distance', min: 0.6, max: 4, step: 0.1, fmt: v => `${Math.round(15 * v)} km`, get: () => Settings.gfx.viewDist, set: v => { Settings.gfx.viewDist = v; Gfx.apply(); },
+      hint: 'How far you can see on a clear day: thinner haze, a wider sea and islands streamed in from further out.' },
     { label: 'Clouds', type: 'select', numeric: true, options: [[0, 'Painted'], [1, 'Volumetric low'], [2, 'Volumetric'], [3, 'Volumetric high']],
       get: () => Settings.gfx.clouds, set: gfxSet('clouds') },
     { label: 'Shadows', type: 'select', numeric: true, options: [[0, 'Off'], [1, 'Low'], [2, 'Medium'], [3, 'High']],

@@ -156,6 +156,11 @@ function updateEnemies(dt, t) {
             e.obj.position.set(e.x, y, e.z);
             e.obj.rotation.set(Math.atan2(hs - hb, 2 * L) * (e.sinking ? 0.3 : 0.8) + (broken ? 0 : tilt * 0.004 * e.side), e.heading, Math.atan2(hp - hst, 2 * B) * (e.sinking ? 0.3 : 0.6) + tilt * (broken ? 0.005 : 0.012) * e.side, 'YXZ');
         } else e.bottomT += dt;
+        // Going down, and for a while on the bottom, she keeps bleeding oil up over the spot
+        if (e.sinking && dt > 0 && (!e.onBottom || e.bottomT < 120) && (e.leakT = (e.leakT ?? 2) - dt) <= 0) {
+            e.leakT = rnd(5, 10);
+            Slicks.spill(e.x + randn() * 6, e.z + randn() * 6, rnd(14, 28) * Math.min(1.5, e.model.len / 60));
+        }
         e.obj.updateMatrixWorld(true);
         if (broken) Wreck.pose(e.obj, e.onBottom ? 0 : dt);
 
@@ -294,8 +299,9 @@ function damageEnemy(e, amount, worldP) {
         FX.explosion(p, big ? 2.2 : 1);
         if (big) FX.fuelBlast(p, 0.7);
         playBoom(p, 1.6, 300, 3.5);
-        Debris.burst(p, big ? 50 : 16, big ? 1.3 : 0.7, { vel: enemyVelocity(e).clone(), speed: 1.4, smoky: 0.6, burning: 0.45 });
-        Debris.burst(p, big ? 30 : 10, big ? 1 : 0.6, { vel: enemyVelocity(e).clone(), speed: 0.7, kind: 4 });
+        Debris.burst(p, big ? 50 : 16, big ? 1.6 : 0.8, { vel: enemyVelocity(e).clone(), speed: 1.4, smoky: 0.6, burning: 0.45, mix: 'blast', crew: big ? 3.5 : 1.2, side: 'ijn' });
+        Debris.burst(p, big ? 30 : 10, big ? 1 : 0.6, { vel: enemyVelocity(e).clone(), speed: 0.7, mix: 'wood' });
+        Slicks.spill(e.x, e.z, big ? rnd(45, 70) : rnd(18, 30), { burn: big && Math.random() < 0.6 ? rnd(30, 70) : 0, grow: big ? 2.6 : 1.8 });
         for (let k = 0; k < (big ? 2 : 0); k++) blowOffMount(e, 1.4);
         // A broken back, a magazine or a torpedo amidships: she breaks in two
         const W = e.obj.userData.wreck;
@@ -321,7 +327,8 @@ function onEnemyShellHit(e, p, dir = null) {
     const local = e.obj.worldToLocal(p.clone());
     const keel = HullDamage.onEnemy(e, local, 1, dir ? p.clone().addScaledVector(dir, -15) : null, dir);
     _bo.set(Math.sign(local.x || 1), 0, 0).transformDirection(e.obj.matrixWorld);
-    Debris.burst(p, rnd(10, 16), 0.55, { vel: enemyVelocity(e).clone(), dir: _bo.clone() });
+    Debris.burst(p, rnd(10, 16), 0.8, { vel: enemyVelocity(e).clone(), dir: _bo.clone(), mix: local.y > 2.5 ? 'house' : 'hull', crew: local.y > 2.5 ? 0.3 : 0.1, side: 'ijn' });
+    if (local.y < 1.2 && Math.random() < 0.35) Slicks.spill(p.x, p.z, rnd(10, 22));   // holed at the waterline: she bleeds oil
     if (e.sinking) return;   // a wreck going down: torn up further, nothing more to score
     Game.onHit(e);
     if (keel >= 100 && e.model.len > 40) { damageEnemy(e, e.hp + 1, p); if (!e.obj.userData.wreck.broken) Wreck.breakApart(e.obj); return; }
@@ -337,7 +344,8 @@ function onEnemyTorpedoHit(e, p) {
     // Into her side below the waterline: cast in toward her centreline to find the plating
     const at = p.clone().setY(p.y - 0.8), dir = new THREE.Vector3(e.x - p.x, 0, e.z - p.z).normalize();
     const keel = HullDamage.onEnemy(e, local.setY(-0.8), 4, at.clone().addScaledVector(dir, -12), dir);
-    Debris.burst(p.clone().setY(p.y + 2), 34, 1, { vel: enemyVelocity(e).clone(), speed: 1.2, smoky: 0.5 });
+    Debris.burst(p.clone().setY(p.y + 2), 34, 1.3, { vel: enemyVelocity(e).clone(), speed: 1.2, smoky: 0.5, mix: 'blast', crew: 0.8, side: 'ijn' });
+    Slicks.spill(p.x, p.z, rnd(30, 50), { burn: Math.random() < 0.4 ? rnd(20, 45) : 0 });
     if (e.sinking) return;
     damageEnemy(e, TORP_TYPES.mk15.damage + e.type.hp * 0.35, p);
     if (keel >= 60 && e.model.len > 40) { if (!e.sinking) damageEnemy(e, e.hp + 1, p); Wreck.breakApart(e.obj); }

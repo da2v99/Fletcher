@@ -107,6 +107,7 @@ function initKeys() {
         // On foot, in the water or in the boat: the walker gets the keys (even after the ship is lost)
         if (Person.active) { if (!Game.paused) Person.key(k, true, e); return; }
         if (!Game.running || Game.paused) return;
+        if (!e.repeat && FilmCam.key(e)) return;   // F2-F8: cinematic cameras
         if (k === 'a' || k === 'arrowleft') drive.left = true;
         if (k === 'd' || k === 'arrowright') drive.right = true;
         if (k === ' ') { ensureAudio(); if (AA.manned) AA.trigger = true; else director.trigger = true; }
@@ -231,6 +232,7 @@ function animate() {
     updateLightning(realDt);
     updateEffects(dt);
     Debris.update(dt, simTime);
+    Slicks.update(dt, simTime);
     Clouds.update(renderer);
     skyDome.position.copy(camera.position);
     Stars.update();

@@ -418,7 +418,7 @@ const Air = (() => {
         const local = myShip.worldToLocal(p.clone());
         // A crater blown in her: straight down through the deck where it struck
         if (HullDamage.onPlayer(local, 3, p.clone().setY(p.y + 14), new THREE.Vector3(0, -1, 0)) >= 100) breakPlayer();
-        Debris.burst(p, 26, 0.9, { vel: phys.vel.clone(), speed: 1.2, smoky: 0.5, burning: 0.4 });
+        Debris.burst(p, 26, 1.1, { vel: phys.vel.clone(), speed: 1.2, smoky: 0.5, burning: 0.4, mix: local.z > -37 && local.z < 35 ? 'house' : 'deck', crew: 1.4, side: 'us' });
         playerDmg.hull -= rnd(10, 16);
         Game.stats.hitsTaken++;
         let msg = `BOMB HIT ${local.z > 20 ? 'forward' : local.z < -20 ? 'aft' : 'amidships'}!`;
@@ -486,7 +486,7 @@ const Air = (() => {
         const g = Islands.groundAt(p.pos.x, p.pos.z), wh = p.pos.y < 30 ? waterHeight(p.pos.x, p.pos.z, t) : -1;
         if (p.pos.y < Math.max(g, wh)) {
             if (g > wh) { FX.dirt(p.pos.clone().setY(g), 1.6); Islands.impact(p.pos.clone().setY(g), 1.4, null, false); }
-            else { FX.splash(p.pos.x, wh, p.pos.z, WHITE_SPRAY, 1.3); FX.explosion(p.pos.clone().setY(wh + 1), 0.7); }
+            else { FX.splash(p.pos.x, wh, p.pos.z, WHITE_SPRAY, 1.3); FX.explosion(p.pos.clone().setY(wh + 1), 0.7); Slicks.spill(p.pos.x, p.pos.z, rnd(8, 16), { burn: Math.random() < 0.6 ? rnd(8, 20) : 0, grow: 1.4 }); }
             playBoom(p.pos, 1.2, 500, 2.5);
             if (playerHitTest(p.pos, 6)) { playerDmg.hull -= rnd(4, 8); hudMessage('A burning plane crashed into the ship!', 'alert'); }
             p.gone = true;
