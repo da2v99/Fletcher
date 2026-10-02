@@ -102,7 +102,15 @@ aboard and you go down with her: the light fails as you sink, the murk closes in
 - **Holes:** shells and torpedoes cut real, jagged holes through the plating (scorched round the edges; you see
   the dark inside of the hull through them), in every ship's own frame so they roll with her. Thin superstructure
   plating loses whole chunks; the hull's side plating is holed and pushed in.
-- **Dents:** each hit pushes the plating in round it, a crumpled crater in the mesh itself.
+- **Dents and torn metal:** each hit pushes the plating in round it, a crumpled, buckled crater in the mesh
+  itself, its torn edge bent hard in (a shell punching through) or out (a burst inside thin plating). Flat panels
+  are subdivided round the hit first so deckhouses, funnels and shields bend too. Strips of plate peel back from
+  the bigger holes, curled and twisted, painted on one side and scorched and rusty on the other. Torpedoes and
+  bombs tear holes metres across.
+- **Inside:** through the holes you see the hull's frames, bulkheads and platform deck.
+- **Wrecked fittings:** a hole torn through a 5" mount, a light AA mount, a torpedo mount or the Mk 37 director
+  wrecks it for good: it stops dead, the barrels sag, it smokes and won't fire again (damage control can't fix
+  it between engagements). Enemy mounts and launchers likewise.
 - **Bullet holes:** 20 mm, 40 mm, shore 25 mm and the Zeros' guns pock the plating with holes chipped back to
   bare steel.
 - **Wrecks:** a ship going down (and both halves of a broken one) still stops rounds and torpedoes, and keeps

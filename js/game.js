@@ -169,7 +169,7 @@ const Game = {
                 playerDmg.fires.length = 0;
                 phys.flood = 0;
                 phys.engine = Math.min(1, phys.engine + 0.3);
-                guns.forEach(g => { g.disabled = false; });
+                guns.forEach(g => { g.disabled = !!g.wrecked; });   // a holed mount stays wrecked
                 AA.repairAll();
                 torpMounts.forEach(m => { m.left = 5; });
                 hudMessage('Repairs made, torpedoes reloaded. Next contact expected shortly.', 'good');
