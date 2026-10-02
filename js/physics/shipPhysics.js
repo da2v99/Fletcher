@@ -181,6 +181,22 @@ function stepPhysics(dt, t) {
     for (let i = 0; i < n; i++) stepPhysicsOnce(dt / n, t + dt * i / n, s);
     capsizeAssist(dt);
     groundShip(dt);
+    settleOnBottom(dt);
+}
+
+// A ship that goes down comes to rest on the bottom (70 m out in the Slot's shallower stretches, for the
+// game; the island shelves where they are shallower) instead of sinking forever, so you can dive on her
+const SEABED_DEPTH = 70;
+function settleOnBottom(dt) {
+    const bed = Math.max(typeof Islands !== 'undefined' ? Islands.groundAt(phys.pos.x, phys.pos.z) : -1000, -SEABED_DEPTH);
+    const s = hullScale();
+    if (phys.pos.y + (KEEL_Y - 2) * s > bed) return;
+    phys.pos.y = bed - (KEEL_Y - 2) * s;
+    if (phys.vel.y < 0) phys.vel.y = 0;
+    const f = Math.exp(-dt * 1.5);
+    phys.vel.x *= f; phys.vel.z *= f;
+    phys.yawRate *= f;
+    phys.tiltW.multiplyScalar(Math.exp(-dt * 2));
 }
 
 // Running aground: keel points that touch the bottom are pushed back toward deep water, the hull grinds to a

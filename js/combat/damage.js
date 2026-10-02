@@ -30,6 +30,8 @@ function onPlayerShellHit(p) {
     const local = myShip.worldToLocal(p.clone());
     FX.explosion(p);
     playBoom(p, 1.2, 1100, 2.4);
+    HullDamage.onPlayer(local);
+    Debris.burst(p, rnd(7, 12), 0.55, { vel: phys.vel.clone(), dir: new THREE.Vector3(Math.sign(local.x || 1), 0.3, 0).applyQuaternion(phys.quat) });
     const dmg = rnd(3, 5);
     playerDmg.hull -= dmg;
     Game.stats.hitsTaken++;
@@ -60,6 +62,9 @@ function onPlayerTorpedoHit(p) {
     const local = myShip.worldToLocal(p.clone());
     FX.waterColumn(p);
     playBoom(p, 2.2, 380, 4);
+    HullDamage.onPlayer(local.clone().setY(0.8));
+    HullDamage.onPlayer(local.clone().setY(1.6).setZ(local.z + 2.4));
+    Debris.burst(p.clone().setY(p.y + 3), 24, 1, { vel: phys.vel.clone(), speed: 1.2, smoky: 0.5 });
     cameraShake(2.2);
     playerDmg.hull -= rnd(34, 44);
     phys.engine = Math.max(0.25, phys.engine * 0.7);

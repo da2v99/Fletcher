@@ -53,8 +53,8 @@
     <div id="keys" class="panel">
         <b>W/S</b> engine order · <b>0</b> all stop · <b>A/D</b> rudder<br>
         <b>Mouse</b> crosshair · <b>X</b> lock target · <b>Space</b> fire · <b>T</b> torpedoes<br>
-        <b>LMB</b> pan · <b>RMB</b> orbit · <b>Wheel</b> zoom · <b>C</b> chase / orbit<br>
-        <b>B</b> captain's view · <b>G</b> AA gun · <b>Esc</b> pause
+        <b>Click</b> gun-aim camera · <b>RMB</b> orbit / zoom · <b>Wheel</b> zoom · <b>C</b> chase / orbit<br>
+        <b>B</b> captain's view · <b>G</b> AA gun · <b>V</b> walk the deck · <b>Esc</b> pause
     </div>
 
     <div id="captainPanel">
@@ -84,7 +84,9 @@
                 <span>B</span><span>Captain's view: binoculars and gun director</span>
                 <span>T</span><span>Launch a 5-torpedo spread</span>
                 <span>G</span><span>Man an AA gun (Q / E: next gun)</span>
-                <span>LMB / RMB</span><span>Pan / orbit the camera (C: back to chase)</span>
+                <span>Click</span><span>Gun-aim camera: the mouse orbits, crosshair in the centre (Esc frees the mouse)</span>
+                <span>RMB / MMB</span><span>Orbit / pan the camera (C: back to chase)</span>
+                <span>V</span><span>Walk the deck: climb, jump overboard, swim, row the whaleboat</span>
             </div>
             <div class="touch-help">Drag the telegraph lever for speed · steer with the rudder slider, the wheel or by tilting the phone (Settings › Controls) · tap a target to lock it · hold FIRE · AA puts you on a 40 mm gun · VIEW for the bridge binoculars</div>
         </div>
@@ -113,7 +115,7 @@
                 <div id="tab_sea" class="tabpane">
                     <h3>Weather</h3>
                     <div class="ctl range"><label>Time of day <b id="setTimeVal"></b></label>
-                        <input id="setTime" type="range" min="5.4" max="18.6" step="0.05" value="6.4"></div>
+                        <input id="setTime" type="range" min="4.4" max="19.6" step="0.05" value="6.4"></div>
                     <div class="ctl range"><label>Weather <b id="setWeatherVal"></b></label>
                         <input id="setWeather" type="range" min="0" max="1" step="0.01" value="0.6"></div>
                     <div id="seaControls"></div>
@@ -136,6 +138,7 @@
             <div class="kicker red">Lost with all guns firing</div>
             <h2>USS Fletcher has been sunk</h2>
             <div id="goStats"></div>
+            <button id="btnSwim" class="btn">Swim for it · the whaleboat</button>
             <button id="btnRetry" class="btn primary">Try Again</button>
             <button id="btnGoMenu" class="btn ghost">Main Menu</button>
         </div>
@@ -157,12 +160,15 @@
     <script src="js/env/shipWaves.js"></script>
     <script src="js/env/clouds.js"></script>
     <script src="js/env/ocean.js"></script>
+    <script src="js/env/stars.js"></script>
+    <script src="js/env/underwater.js"></script>
     <!-- Simulation -->
     <script src="js/physics/shipPhysics.js"></script>
     <script src="js/fx/particles.js"></script>
     <script src="js/fx/tracers.js"></script>
     <script src="js/fx/audio.js"></script>
     <script src="js/fx/post.js"></script>
+    <script src="js/fx/debris.js"></script>
     <script src="js/combat/ballistics.js"></script>
     <script src="js/combat/torpedoes.js"></script>
     <script src="js/combat/enemyModels.js"></script>
@@ -173,10 +179,12 @@
     <script src="js/world/islands.js"></script>
     <script src="js/combat/air.js"></script>
     <script src="js/combat/aa.js"></script>
+    <script src="js/combat/autoCaptain.js"></script>
     <!-- View, UI, game -->
     <script src="js/view/aiming.js"></script>
     <script src="js/view/captain.js"></script>
     <script src="js/view/cameras.js"></script>
+    <script src="js/view/person.js"></script>
     <script src="js/ui/hud.js"></script>
     <script src="js/ui/settingsUI.js"></script>
     <script src="js/ui/touch.js"></script>

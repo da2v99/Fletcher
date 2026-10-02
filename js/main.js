@@ -18,12 +18,15 @@ window.addEventListener('load', () => {
     const cube = Clouds.init();
     skyDome = Clouds.createSkyDome(cube);
     scene.add(skyDome);
+    scene.add(Stars.build(cube));
     ocean = createOcean(cube);
     scene.add(ocean);
     rain = createRain();
     scene.add(rain.lines);
 
     initEffects();
+    Debris.init();
+    Underwater.init();
     Tracers.init();
     Islands.init();
     initShells();
@@ -33,6 +36,7 @@ window.addEventListener('load', () => {
     initCaptainInput();
     initThirdPersonAim();
     initCameraInput();
+    Person.init();
     initMenus();
     initKeys();
     TouchUI.apply();
@@ -65,7 +69,7 @@ function initRenderer() {
     controls.maxPolarAngle = Math.PI / 2 - 0.02;
     controls.minDistance = 8;
     controls.maxDistance = 600;
-    controls.mouseButtons = { LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE };
+    controls.mouseButtons = { LEFT: -1, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.ROTATE };   // left click: gun-aim camera (cameras.js)
     controls.enabled = false;
 
     ambLight = new THREE.AmbientLight(0xffffff, 0.22);
@@ -93,25 +97,29 @@ function initKeys() {
         const k = e.key.toLowerCase();
         if (k.startsWith('arrow') || k === ' ') e.preventDefault();
         if (k === 'escape' || k === 'p') {
-            if (Game.running && !Game.over) Game.setPaused(!Game.paused);
+            if ((Game.running && !Game.over) || Person.active) Game.setPaused(!Game.paused);
             return;
         }
+        // On foot, in the water or in the boat: the walker gets the keys (even after the ship is lost)
+        if (Person.active) { if (!Game.paused) Person.key(k, true, e); return; }
         if (!Game.running || Game.paused) return;
         if (k === 'a' || k === 'arrowleft') drive.left = true;
         if (k === 'd' || k === 'arrowright') drive.right = true;
         if (k === ' ') { ensureAudio(); if (AA.manned) AA.trigger = true; else director.trigger = true; }
         if (e.repeat) return;
         if (k === 'g') { ensureAudio(); AA.toggleManned(); return; }
+        if (k === 'v') { ensureAudio(); Person.enter(); return; }
         if (AA.manned) {
             if (k === 'q') AA.cycle(-1);
             if (k === 'e') AA.cycle(1);
             if (k === 'z') AA.toggleZoom();
+            if (k === 'r') AA.toggleBattery();
             if (k === 'x') toggleLock(window.innerWidth / 2, window.innerHeight / 2);
             if (k === 'b') { AA.leave(); setCaptain(true); }
             if (k === 'c') AA.leave();
-            if (k === 'w' || k === 'arrowup') { ensureAudio(); setEngineOrder(drive.order + 1); }
-            if (k === 's' || k === 'arrowdown') { ensureAudio(); setEngineOrder(drive.order - 1); }
-            if (k === '0') setEngineOrder(STOP_IDX);
+            if (k === 'w' || k === 'arrowup') { ensureAudio(); setEngineOrder(drive.order + 1); AutoCaptain.manualOrder(); }
+            if (k === 's' || k === 'arrowdown') { ensureAudio(); setEngineOrder(drive.order - 1); AutoCaptain.manualOrder(); }
+            if (k === '0') { setEngineOrder(STOP_IDX); AutoCaptain.manualOrder(); }
             if (k === 't') fireTorpedoes();
             return;
         }
@@ -119,7 +127,7 @@ function initKeys() {
         if (k === 's' || k === 'arrowdown') { ensureAudio(); setEngineOrder(drive.order - 1); }
         if (k === '0') setEngineOrder(STOP_IDX);
         if (k === 'x') {
-            if (captain.active) toggleLock(window.innerWidth / 2, window.innerHeight / 2);
+            if (captain.active || cameraMode === 'aim') toggleLock(window.innerWidth / 2, window.innerHeight / 2);
             else if (tpAim.onCanvas) toggleLock(tpAim.x, tpAim.y);
             else toggleLock();   // mouse off the view: X just releases
         }
@@ -136,6 +144,7 @@ function initKeys() {
     window.addEventListener('blur', () => { drive.left = drive.right = false; director.trigger = false; AA.trigger = false; });
     window.addEventListener('keyup', e => {
         const k = e.key.toLowerCase();
+        if (Person.active) { Person.key(k, false, e); return; }
         if (k === 'a' || k === 'arrowleft') drive.left = false;
         if (k === 'd' || k === 'arrowright') drive.right = false;
         if (k === ' ') { director.trigger = false; AA.trigger = false; }
@@ -185,11 +194,13 @@ function animate() {
     myShip.quaternion.copy(phys.quat);
     myShip.updateMatrixWorld(true);
     if (dt > 0) {
+        AutoCaptain.update(dt);
         updatePlayerGuns(dt);
         updateTorpedoMounts(dt);
         Air.update(dt, simTime);
         AA.update(dt);
     }
+    Person.update(dt, simTime);
     {
         const spin = drive.thrust * phys.engine / T_MAX * 0.5;
         myShip.userData.props[0].rotation.z -= spin;
@@ -215,8 +226,11 @@ function animate() {
     rain.update(dt, phys.vel);
     updateLightning(realDt);
     updateEffects(dt);
+    Debris.update(dt, simTime);
     Clouds.update(renderer);
     skyDome.position.copy(camera.position);
+    Stars.update();
+    Underwater.update(realDt, simTime);
 
     Gfx.render(realDt * 1000, simTime);
     checkShaders();

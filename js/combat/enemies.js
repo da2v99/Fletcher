@@ -254,13 +254,37 @@ function damageEnemy(e, amount, worldP) {
     if (e.hp <= 0) {
         e.sinking = true;
         Game.onEnemySunk(e);
+        // Her magazine or boilers go: a secondary explosion, wreckage everywhere, a mount or two blown off
+        const big = e.model.len > 40;
+        const p = e.obj.localToWorld(new THREE.Vector3(0, 3, rnd(-0.2, 0.2) * e.model.len));
+        FX.explosion(p, big ? 2.2 : 1);
+        if (big) FX.fuelBlast(p, 0.7);
+        playBoom(p, 1.6, 300, 3.5);
+        Debris.burst(p, big ? 34 : 12, big ? 1.3 : 0.7, { vel: enemyVelocity(e).clone(), speed: 1.4, smoky: 0.6, burning: 0.45 });
+        for (let k = 0; k < (big ? 2 : 0); k++) blowOffMount(e, 1.4);
     }
+}
+
+// A gun mount (or torpedo launcher) torn off the ship by a hit and thrown into the air
+const _bo = new THREE.Vector3();
+function blowOffMount(e, force = 1) {
+    const list = e.model.turrets.length ? e.model.turrets : e.model.torpLaunchers;
+    if (!list.length) return;
+    const t = list.splice(Math.floor(Math.random() * list.length), 1)[0];
+    const v = enemyVelocity(e).clone().add(_bo.set(randn() * 5, rnd(14, 24) * force, randn() * 5));
+    Debris.blowOff(t, v, force);
 }
 
 function onEnemyShellHit(e, p) {
     FX.explosion(p);
     playBoom(p, 0.8, 900, 2.2);
     Game.onHit(e);
+    // Wreckage out of the hit, a hole in her side, and now and then a mount blown clean off once she is hurt
+    const local = e.obj.worldToLocal(p.clone());
+    HullDamage.onEnemy(e, local);
+    _bo.set(Math.sign(local.x || 1), 0, 0).transformDirection(e.obj.matrixWorld);
+    Debris.burst(p, rnd(6, 11), 0.55, { vel: enemyVelocity(e).clone(), dir: _bo.clone() });
+    if (e.hp < e.type.hp * 0.55 && e.model.len > 40 && Math.random() < 0.18) blowOffMount(e);
     damageEnemy(e, 1, p);
 }
 
@@ -268,5 +292,9 @@ function onEnemyTorpedoHit(e, p) {
     FX.waterColumn(p);
     playBoom(p, 1.6, 400, 3.5);
     hudMessage(`Torpedo hit on the ${e.type.name.toLowerCase()}!`, 'good');
+    const local = e.obj.worldToLocal(p.clone());
+    HullDamage.onEnemy(e, local.setY(1));
+    HullDamage.onEnemy(e, local.setZ(local.z + 2.5));
+    Debris.burst(p.clone().setY(p.y + 2), 22, 1, { vel: enemyVelocity(e).clone(), speed: 1.2, smoky: 0.5 });
     damageEnemy(e, TORP_TYPES.mk15.damage + e.type.hp * 0.35, p);
 }

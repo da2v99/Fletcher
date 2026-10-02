@@ -98,7 +98,7 @@ const Gfx = (() => {
         p.comp = mat(`
             uniform sampler2D tScene, tB0, tB1, tB2, tShaft;
             uniform vec2 uTexel;
-            uniform float uBloom, uShaft, uVig, uGrain, uTime, uBars, uFxaa, uAspect, uGrade, uFlare, uExposure;
+            uniform float uBloom, uShaft, uVig, uGrain, uTime, uBars, uFxaa, uAspect, uGrade, uFlare, uExposure, uUnder;
             uniform vec2 uSun;
             uniform vec3 uSunCol;
             varying vec2 vUv;
@@ -149,6 +149,8 @@ const Gfx = (() => {
             }
             void main() {
                 vec2 uv = vUv;
+                // Under water: the view swims a little
+                if (uUnder > 0.0) uv += vec2(sin(uv.y * 23.0 + uTime * 1.7), cos(uv.x * 19.0 + uTime * 1.3)) * 0.0022 * uUnder;
                 vec3 c = uFxaa > 0.5 ? fxaa(uv) : texture2D(tScene, uv).rgb;
                 c *= uExposure;
                 vec3 bloom = texture2D(tB0, uv).rgb * 0.45 + texture2D(tB1, uv).rgb * 0.7 + texture2D(tB2, uv).rgb * 0.9;
@@ -167,7 +169,7 @@ const Gfx = (() => {
                 c = softClip(c);
                 c = clamp(grade(c), 0.0, 1.0);
                 vec2 q = uv - 0.5; q.x *= uAspect;
-                c *= 1.0 - uVig * smoothstep(0.3, 1.05, length(q) * 1.1);
+                c *= 1.0 - (uVig + 0.35 * uUnder) * smoothstep(0.3, 1.05, length(q) * 1.1);
                 c += (hash(uv * 1733.0 + fract(uTime * 7.31) * 91.0) - 0.5) * uGrain;
                 if (uBars > 0.0 && abs(uv.y - 0.5) > 0.5 - uBars) c = vec3(0.0);
                 gl_FragColor = vec4(c, 1.0);
@@ -175,7 +177,7 @@ const Gfx = (() => {
             tScene: { value: null }, tB0: { value: null }, tB1: { value: null }, tB2: { value: null }, tShaft: { value: null },
             uTexel: { value: new THREE.Vector2() }, uBloom: { value: 0.5 }, uShaft: { value: 0 }, uVig: { value: 0.4 }, uGrain: { value: 0.03 },
             uTime: { value: 0 }, uBars: { value: 0 }, uFxaa: { value: 1 }, uAspect: { value: 1 }, uGrade: { value: 1 }, uFlare: { value: 0 },
-            uExposure: { value: 1 }, uSun: { value: new THREE.Vector2(-9, -9) }, uSunCol: { value: new THREE.Color(1, 1, 1) }
+            uExposure: { value: 1 }, uUnder: { value: 0 }, uSun: { value: new THREE.Vector2(-9, -9) }, uSunCol: { value: new THREE.Color(1, 1, 1) }
         });
         return p;
     }
@@ -323,6 +325,7 @@ const Gfx = (() => {
         U.uSun.value.set(_sun.x * 0.5 + 0.5, _sun.y * 0.5 + 0.5);
         U.uSunCol.value.copy(WEATHER_U.uSunCol.value);
         U.uVig.value = g.vignette;
+        U.uUnder.value = typeof Underwater !== 'undefined' ? Underwater.amount : 0;
         U.uGrain.value = g.grain;
         U.uTime.value = t;
         U.uFxaa.value = g.aa === 'fxaa' ? 1 : 0;

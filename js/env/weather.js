@@ -22,6 +22,9 @@ const SKY_GLSL = `
     uniform float uStorm;
     uniform float uFlash;
     uniform vec3 uSunCol;
+    // 0 by day and through civil twilight, 1 once the sun is well down: the sky, sea and clouds darken for
+    // the stars (stars.js)
+    float nightF() { return smoothstep(-0.02, -0.3, uSunDir.y); }
     vec3 skyColor(vec3 d) {
         d = normalize(d);
         float h = d.y;
@@ -31,10 +34,12 @@ const SKY_GLSL = `
         vec3 zenith = mix(vec3(0.05, 0.22, 0.62), vec3(0.12, 0.18, 0.38), dawn);
         vec3 horizon = mix(vec3(0.58, 0.76, 0.93), vec3(0.66, 0.64, 0.72), dawn);
         horizon += vec3(0.55, 0.22, 0.02) * dawn * pow(sd, 2.5);
-        float bright = mix(0.45, 1.0, day);
+        float night = nightF();
+        float bright = mix(0.45, 1.0, day) * (1.0 - 0.86 * night);
+        zenith = mix(zenith, vec3(0.02, 0.05, 0.16), night);
         vec3 col = mix(horizon, zenith, pow(clamp(h, 0.0, 1.0), 0.5)) * bright;
         if (h < 0.0) col = mix(col, vec3(0.16, 0.32, 0.52) * bright, clamp(-h * 4.0, 0.0, 1.0));
-        vec3 overcast = mix(vec3(0.44, 0.48, 0.54), vec3(0.24, 0.26, 0.30), smoothstep(0.0, 0.5, h)) * mix(0.5, 1.0, day);
+        vec3 overcast = mix(vec3(0.44, 0.48, 0.54), vec3(0.24, 0.26, 0.30), smoothstep(0.0, 0.5, h)) * mix(0.5, 1.0, day) * (1.0 - 0.86 * night);
         float gap = dawn * pow(sd, 4.0) * exp(-max(h, 0.0) * 12.0);
         col = mix(col, overcast, uStorm * 0.9 * (1.0 - gap * 0.8));
         col += uSunCol * (pow(sd, 8.0) * 0.16 * (1.0 - uStorm * 0.5) + pow(sd, 90.0) * 0.45 * (1.0 - uStorm * 0.9));
@@ -50,6 +55,8 @@ function applyWeather() {
     SUN_DIR.set(-Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el)).normalize();
     const dawn = 1 - smooth(0.05, 0.45, SUN_DIR.y);
     const day = smooth(-0.1, 0.3, SUN_DIR.y);
+    const night = smooth(-0.02, -0.3, SUN_DIR.y);   // matches nightF() in SKY_GLSL
+    weather.night = night;
     const sunCol = new THREE.Color(1, 0.97, 0.92).lerp(new THREE.Color(1, 0.58, 0.32), dawn);
     WEATHER_U.uSunCol.value.copy(sunCol);
     WEATHER_U.uStorm.value = s;
@@ -59,13 +66,13 @@ function applyWeather() {
     sunLight.intensity = 1.6 * smooth(-0.02, 0.12, SUN_DIR.y) * (1 - 0.78 * s);
     hemiLight.color.set(0xbfdcff).lerp(new THREE.Color(0x8e98a6), s).lerp(new THREE.Color(0xc9a898), dawn * 0.3);
     hemiLight.groundColor.set(0x0f2a45).lerp(new THREE.Color(0x1a2026), s);
-    weather.hemiBase = (0.5 + 0.15 * s) * (0.4 + 0.6 * day);
+    weather.hemiBase = (0.5 + 0.15 * s) * (0.4 + 0.6 * day) * (1 - 0.7 * night);
     hemiLight.intensity = weather.hemiBase;
-    ambLight.intensity = 0.22 * (0.45 + 0.55 * day);
+    ambLight.intensity = 0.22 * (0.45 + 0.55 * day) * (1 - 0.6 * night);
 
     // Ship fog uses the same horizon colour and density law as the sky and ocean shaders
-    const hz = new THREE.Color(0.58, 0.76, 0.93).lerp(new THREE.Color(0.66, 0.64, 0.72), dawn).multiplyScalar(lerp(0.45, 1, day));
-    const oc = new THREE.Color(0.44, 0.48, 0.54).multiplyScalar(lerp(0.5, 1, day));
+    const hz = new THREE.Color(0.58, 0.76, 0.93).lerp(new THREE.Color(0.66, 0.64, 0.72), dawn).multiplyScalar(lerp(0.45, 1, day) * (1 - 0.86 * night));
+    const oc = new THREE.Color(0.44, 0.48, 0.54).multiplyScalar(lerp(0.5, 1, day) * (1 - 0.86 * night));
     scene.fog.color.copy(hz.lerp(oc, s * 0.9));
     scene.fog.density = WEATHER_U.uFogDensity.value;
     if (typeof Clouds !== 'undefined') Clouds.invalidate();

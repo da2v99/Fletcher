@@ -90,6 +90,7 @@ function initMenus() {
     $('btnSettingsBack').onclick = () => showScreen(settingsReturn);
     $('btnRetry').onclick = () => Game.start(Game.mode === 'menu' ? 'patrol' : Game.mode);
     $('btnGoMenu').onclick = () => Game.toMenu();
+    $('btnSwim').onclick = () => { showScreen(null); Person.abandon(); };
     $('btnSeaReset').onclick = () => {
         const { hs, massPos } = SeaParams;
         Object.assign(SeaParams, SEA_DEFAULTS, { hs, massPos });

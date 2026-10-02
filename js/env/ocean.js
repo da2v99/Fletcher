@@ -124,6 +124,72 @@ function wakeGLSL(n) {
     }`;
 }
 
+// Short wind waves and capillaries, for the normal only (shading, not buoyancy): octaves of gradient noise, each
+// stretched along its crests and turned to its own heading round the wind, drifting at its own deep-water speed.
+// Their strength wanders in big soft patches (cat's paws and slicks), so no two stretches of sea look alike and
+// the regular interference pattern of the Gerstner set no longer shows. Each octave fades out once a pixel
+// covers too much of its wavelength. Returns the surface slope (dh/dx, dh/dz).
+function rippleGLSL(octaves) {
+    return `
+    vec2 rippleGrad(vec2 i) { float h = hash12(i) * 6.2831853; return vec2(cos(h), sin(h)); }
+    // Gradient noise with analytic derivatives: x = value, yz = d/dp
+    vec3 gnoised(vec2 p) {
+        vec2 i = floor(p), f = fract(p);
+        vec2 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
+        vec2 du = 30.0 * f * f * (f * (f - 2.0) + 1.0);
+        vec2 ga = rippleGrad(i), gb = rippleGrad(i + vec2(1.0, 0.0)), gc = rippleGrad(i + vec2(0.0, 1.0)), gd = rippleGrad(i + vec2(1.0, 1.0));
+        float va = dot(ga, f), vb = dot(gb, f - vec2(1.0, 0.0)), vc = dot(gc, f - vec2(0.0, 1.0)), vd = dot(gd, f - vec2(1.0, 1.0));
+        float k = va - vb - vc + vd;
+        return vec3(va + u.x * (vb - va) + u.y * (vc - va) + u.x * u.y * k,
+                    ga + u.x * (gb - ga) + u.y * (gc - ga) + u.x * u.y * (ga - gb - gc + gd) + du * (u.yx * k + vec2(vb, vc) - va));
+    }
+    vec2 seaRipples(vec2 xz, float t, float fp) {
+        vec2 wd = uWind, wp = vec2(-uWind.y, uWind.x);
+        // Gusts: patches of rougher and glassier water a few hundred metres across, drifting downwind
+        vec2 pq = xz - wd * t * 3.0;
+        float patchy = vnoise(pq * 0.0045) * 0.6 + vnoise(pq * 0.017 + 7.3) * 0.4;
+        float gust = mix(0.3, 1.35, smoothstep(0.22, 0.78, patchy));
+        float rough = (0.55 + 0.6 * uSeaScale.w) * (1.0 + 0.6 * uStorm);
+        vec2 g = vec2(0.0);
+        float lambda = 7.5, ang = 0.0;
+        for (int i = 0; i < ${octaves}; i++) {
+            float fade = 1.0 - smoothstep(lambda * 0.12, lambda * 0.45, fp);
+            if (fade > 0.0) {
+                vec2 dir = cos(ang) * wd + sin(ang) * wp, per = vec2(-dir.y, dir.x);
+                float k = 6.2831853 / lambda;
+                float c = sqrt(9.81 / k);                                   // deep-water phase speed
+                vec2 q = vec2(dot(xz, dir) - c * t, dot(xz, per) * 0.42) / lambda + float(i) * vec2(31.7, 17.1);
+                vec3 n = gnoised(q);
+                // Slope of a height field a·λ·n(q): constant steepness per octave
+                g += (n.y * dir + n.z * 0.42 * per) * 0.075 * fade;
+            }
+            lambda *= 0.53;
+            ang += 2.39996 * (0.35 + 0.1 * float(i));                      // golden-angle headings round the wind
+        }
+        return g * gust * rough;
+    }`;
+}
+
+// The surface seen from below (underwater.js drives the uniforms): Snell's window, the whole sky squeezed into a
+// cone overhead and rippling with the waves, and outside it the dark water reflected back down, all in the murk
+const UNDER_U = { uUnder: { value: 0 }, uUnderCol: { value: new THREE.Color(0.02, 0.09, 0.1) }, uUnderDens: { value: 0.05 } };
+const UNDER_GLSL = `
+    uniform float uUnder;
+    uniform vec3 uUnderCol;
+    uniform float uUnderDens;
+    vec3 underSurface(vec3 world, vec3 N) {
+        vec3 V = normalize(world - cameraPosition);
+        vec3 T = refract(V, -N, 1.333);
+        vec3 col = uUnderCol * 1.4;
+        if (dot(T, T) > 0.01) {
+            vec3 sky = skyColor(T) + uSunCol * pow(max(dot(T, uSunDir), 0.0), 40.0) * 1.5 * (1.0 - uStorm * 0.8);
+            col = mix(col, sky * 0.9, smoothstep(0.0, 0.25, T.y));
+        }
+        float dist = length(world - cameraPosition);
+        return mix(col, uUnderCol, 1.0 - exp(-dist * uUnderDens));
+    }
+`;
+
 // Colour, light, foam and fog: the example's height-gradient palette lit by our sun and sky
 const OCEAN_SHADE_GLSL = `
     uniform samplerCube uSkyCube;
@@ -133,7 +199,7 @@ const OCEAN_SHADE_GLSL = `
         float hNorm = clamp((colorH + uNormSpan * 0.5) / uNormSpan, 0.0, 1.0);
         hNorm = 0.5 + (hNorm - 0.5) * uSeaScale.w;
         float colorMix = pow(hNorm, uEx3.x);
-        float light = mix(0.4, 1.0, smoothstep(-0.1, 0.3, uSunDir.y)) * (1.0 - 0.3 * uStorm);
+        float light = mix(0.4, 1.0, smoothstep(-0.1, 0.3, uSunDir.y)) * (1.0 - 0.3 * uStorm) * (1.0 - 0.8 * nightF());
         vec3 deepC = mix(uDeepC, vec3(0.035, 0.07, 0.095), uStorm * 0.85);
         vec3 peakC = mix(uPeakC, vec3(0.24, 0.36, 0.40), uStorm * 0.85);
         vec3 base = mix(deepC, peakC, colorMix);
@@ -210,7 +276,7 @@ function oceanShaders(q) {
                     vXZ0 = p0;
                     gl_Position = projectionMatrix * viewMatrix * vec4(vWorld, 1.0);
                 }`,
-            fragmentShader: NOISE_GLSL + SKY_GLSL + SEA_GLSL + SHIPWAVE_GLSL + ISLAND_DECL + ISLAND_SHADE + wakeGLSL(nT) + OCEAN_SHADE_GLSL + `
+            fragmentShader: NOISE_GLSL + SKY_GLSL + SEA_GLSL + SHIPWAVE_GLSL + ISLAND_DECL + ISLAND_SHADE + wakeGLSL(nT) + rippleGLSL(5) + UNDER_GLSL + OCEAN_SHADE_GLSL + `
                 varying vec3 vWorld;
                 varying vec2 vXZ0;
                 void main() {
@@ -227,6 +293,9 @@ function oceanShaders(q) {
                         tz.y += shipWaves(p0 + vec2(0.0, e), fp) - hs;
                     }
                     vec3 N = normalize(cross(tz, tx));
+                    vec2 rg = seaRipples(vWorld.xz, uTime, fp);
+                    N = normalize(N + vec3(-rg.x, 0.0, -rg.y) * N.y);
+                    if (uUnder > 0.5 && !gl_FrontFacing) { gl_FragColor = vec4(underSurface(vWorld, N), 1.0); return; }
                     vec4 fw = shipFoamWake(vWorld, hs);
                     gl_FragColor = vec4(shadeSea(vWorld, p0, N, seaColorHeight(p0, uTime), fw, islandShore(vWorld.xz)), 1.0);
                 }`
@@ -263,7 +332,7 @@ function oceanShaders(q) {
                 vShore = islandShore(P.xz);
                 gl_Position = projectionMatrix * viewMatrix * vec4(P, 1.0);
             }`,
-        fragmentShader: NOISE_GLSL + SKY_GLSL + SEA_COLOR_DECL + SHIPWAVE_GLSL + ISLAND_SHADE + wakeGLSL(nT) + OCEAN_SHADE_GLSL + `
+        fragmentShader: NOISE_GLSL + SKY_GLSL + SEA_COLOR_DECL + SHIPWAVE_GLSL + ISLAND_SHADE + wakeGLSL(nT) + rippleGLSL(q === 1 ? 4 : 3) + UNDER_GLSL + OCEAN_SHADE_GLSL + `
             varying vec3 vWorld;
             varying vec2 vXZ0;
             varying vec3 vN;
@@ -272,18 +341,10 @@ function oceanShaders(q) {
             varying float vShore;
             void main() {
                 vec3 N = normalize(vN);
-                ${q === 1 ? `
-                // Per-pixel ripples: two octaves of noise slope, wind-driven, fading with distance
-                float dist0 = length(cameraPosition - vWorld);
-                float k = exp(-dist0 / 220.0);
-                if (k > 0.02) {
-                    vec2 q = vXZ0 * 0.45 + uWind * uTime * 0.7;
-                    float n0 = vnoise(q), n1 = vnoise(q + vec2(0.2, 0.0)), n2 = vnoise(q + vec2(0.0, 0.2));
-                    vec2 q2 = vXZ0 * 1.3 - uWind.yx * uTime * 0.9;
-                    float m0 = vnoise(q2), m1 = vnoise(q2 + vec2(0.2, 0.0)), m2 = vnoise(q2 + vec2(0.0, 0.2));
-                    vec2 g = vec2(n1 - n0, n2 - n0) * 0.6 + vec2(m1 - m0, m2 - m0) * 0.35;
-                    N = normalize(N + vec3(-g.x, 0.0, -g.y) * 0.9 * k);
-                }` : ''}
+                // Per-pixel wind waves and ripples on top of the per-vertex surface
+                vec2 rg = seaRipples(vWorld.xz, uTime, length(fwidth(vXZ0)));
+                N = normalize(N + vec3(-rg.x, 0.0, -rg.y) * N.y);
+                if (uUnder > 0.5 && !gl_FrontFacing) { gl_FragColor = vec4(underSurface(vWorld, N), 1.0); return; }
                 vec4 fw = shipFoamWake(vWorld, vHS);
                 gl_FragColor = vec4(shadeSea(vWorld, vXZ0, N, vHC, fw, vShore), 1.0);
             }`
@@ -308,7 +369,7 @@ function createOcean(skyCube, q = Settings.gfx.ocean) {
         uTrail: { value: trailU },
         uTrailOdo: { value: trailOdo },
         uIsland: { value: islandBlobU }
-    }, SEA_U, WEATHER_U);
+    }, SEA_U, WEATHER_U, UNDER_U);
     const mat = new THREE.ShaderMaterial(Object.assign({ uniforms, extensions: { derivatives: true } }, oceanShaders(q)));
     const mesh = new THREE.Mesh(createOceanGeometry(q), mat);
     mesh.frustumCulled = false;

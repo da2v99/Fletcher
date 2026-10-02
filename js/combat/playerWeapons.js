@@ -76,7 +76,7 @@ function updatePlayerGuns(dt) {
         mk37.rotation.y += Math.max(-0.8 * dt, Math.min(0.8 * dt, wrapAngle(tYaw - mk37.rotation.y)));
     }
 
-    if (Game.running && director.trigger) guns.forEach(g => { if (g.onTarget && g.reload <= 0) fireGun(g); });
+    if (Game.running && (director.trigger || director.aiTrigger)) guns.forEach(g => { if (g.onTarget && g.reload <= 0) fireGun(g); });
 }
 
 function fireGun(g) {
