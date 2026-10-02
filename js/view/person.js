@@ -156,6 +156,20 @@ const Person = (() => {
             return plain.get(m);
         };
         boat.obj.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; o.material = own(o.material); } });
+        // Keep the sea out of the boat: an invisible lid over the opening, just under the gunwale, that only
+        // writes depth. It's drawn after the boat's insides and before the sea (renderOrder 1 vs the sea's 2),
+        // so the floor and thwarts show but the water surface passing through the hull doesn't.
+        const rim = new THREE.Shape();
+        for (let i = 0; i <= 48; i++) {
+            const a = Math.PI * 2 * i / 48, zn = Math.cos(a);
+            const x = Math.sin(a) * 1.02 * (1 - 0.35 * zn * zn), z = zn * 3.9;
+            if (i) rim.lineTo(x, -z); else rim.moveTo(x, -z);
+        }
+        const lid = new THREE.Mesh(new THREE.ShapeGeometry(rim, 1).rotateX(-Math.PI / 2).translate(0, -0.03, 0),
+            new THREE.MeshBasicMaterial({ colorWrite: false, side: THREE.DoubleSide }));
+        lid.renderOrder = 1;
+        lid.name = 'waterMask';
+        boat.obj.add(lid);
         [-1, 1].forEach(s => {
             const pivot = new THREE.Group();
             pivot.position.set(s * 1.0, 0.05, 0.4);
